@@ -1,0 +1,38 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /events/{eventId} {
+      function isValidEvent() {
+        let event = request.resource.data;
+        return event.title is string &&
+               event.title.size() > 0 &&
+               event.start is timestamp &&
+               event.end is timestamp &&
+               event.familyId is string &&
+               event.userId is string &&
+               event.category in ['personal', 'family', 'work', 'holiday'];
+      }
+
+      // Only family members can read their family's events
+      allow read: if request.auth != null && 
+                 resource.data.familyId == request.auth.token.familyId;
+      
+      // Users can create events for their family
+      allow create: if request.auth != null && 
+                   request.resource.data.familyId == request.auth.token.familyId &&
+                   request.resource.data.userId == request.auth.uid &&
+                   isValidEvent();
+      
+      // Users can only update their own events within their family
+      allow update: if request.auth != null && 
+                   resource.data.familyId == request.auth.token.familyId &&
+                   resource.data.userId == request.auth.uid &&
+                   isValidEvent();
+      
+      // Users can only delete their own events
+      allow delete: if request.auth != null && 
+                   resource.data.familyId == request.auth.token.familyId &&
+                   resource.data.userId == request.auth.uid;
+    }
+  }
+} 
