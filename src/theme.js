@@ -42,6 +42,13 @@ const theme = createTheme({
           borderRadius: 16
         }
       }
+    },
+    MuiAppBar: {
+      styleOverrides: {
+        root: {
+          zIndex: 1200
+        }
+      }
     }
   },
   shape: {

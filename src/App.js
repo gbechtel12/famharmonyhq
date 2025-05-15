@@ -12,10 +12,13 @@ import CssBaseline from '@mui/material/CssBaseline';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import Loader from './components/common/Loader';
 import ErrorBoundary from './components/common/ErrorBoundary';
+import NavBar from './components/NavBar';
 import theme from './theme';
 
 const CalendarPage = React.lazy(() => import('./pages/CalendarPage'));
 const LoginPage = React.lazy(() => import('./pages/LoginPage'));
+const ChoresPage = React.lazy(() => import('./pages/ChoresPage'));
+const ProfilePage = React.lazy(() => import('./pages/ProfilePage'));
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth();
@@ -32,8 +35,11 @@ function ProtectedRoute({ children }) {
 }
 
 function Root() {
+  const { user } = useAuth();
+
   return (
     <div className="app-container">
+      {user && <NavBar />}
       <main className="main-content">
         <Outlet />
       </main>
@@ -59,6 +65,26 @@ const router = createBrowserRouter(
         }
       />
       <Route
+        path="chores"
+        element={
+          <ProtectedRoute>
+            <Suspense fallback={<Loader message="Loading chores..." />}>
+              <ChoresPage />
+            </Suspense>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="settings"
+        element={
+          <ProtectedRoute>
+            <Suspense fallback={<Loader message="Loading settings..." />}>
+              <ProfilePage />
+            </Suspense>
+          </ProtectedRoute>
+        }
+      />
+      <Route
         path="login"
         element={
           <Suspense fallback={<Loader message="Loading..." />}>
@@ -67,7 +93,13 @@ const router = createBrowserRouter(
         }
       />
     </Route>
-  )
+  ),
+  {
+    future: {
+      v7_startTransition: true,
+      v7_relativeSplatPath: true
+    }
+  }
 );
 
 function App() {

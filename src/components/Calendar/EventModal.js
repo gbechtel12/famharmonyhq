@@ -141,11 +141,9 @@ export default function EventModal({
   };
 
   const generateRecurringEvents = (baseEvent) => {
-    // Implementation for recurring events
     const events = [];
     const startDate = new Date(baseEvent.start);
     const endDate = new Date(baseEvent.end);
-    const duration = endDate - startDate;
 
     // Generate events for the next 10 occurrences
     for (let i = 0; i < 10; i++) {

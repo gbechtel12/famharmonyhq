@@ -7,6 +7,7 @@ import {
   signOut
 } from 'firebase/auth';
 import { auth } from '../firebase';
+import { userService } from '../services/userService';
 
 const AuthContext = createContext();
 
@@ -20,17 +21,40 @@ export function AuthProvider({ children }) {
   const [authError, setAuthError] = useState(null);
 
   useEffect(() => {
-    return onAuthStateChanged(auth, 
-      (currentUser) => {
-        setUser(currentUser);
-        setLoading(false);
-      },
-      (error) => {
-        console.error("Auth state change error:", error);
-        setAuthError(error);
-        setLoading(false);
+    const handleUser = async (currentUser) => {
+      if (currentUser) {
+        try {
+          // Get or create user profile
+          let userProfile = await userService.getUserProfile(currentUser.uid);
+          
+          if (!userProfile) {
+            // Create new user profile if it doesn't exist
+            await userService.createUserProfile(currentUser.uid, {
+              email: currentUser.email,
+              displayName: currentUser.displayName,
+              photoURL: currentUser.photoURL,
+              familyId: null // Initially no family
+            });
+            userProfile = await userService.getUserProfile(currentUser.uid);
+          }
+
+          // Merge auth user with profile data
+          setUser({
+            ...currentUser,
+            familyId: userProfile.familyId,
+            // Add any other profile fields you need
+          });
+        } catch (error) {
+          console.error('Error setting up user profile:', error);
+          setAuthError(error);
+        }
+      } else {
+        setUser(null);
       }
-    );
+      setLoading(false);
+    };
+
+    return onAuthStateChanged(auth, handleUser);
   }, []);
 
   const signInWithEmail = async (email, password) => {

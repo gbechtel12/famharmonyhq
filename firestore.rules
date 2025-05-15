@@ -1,38 +1,69 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /events/{eventId} {
-      function isValidEvent() {
-        let event = request.resource.data;
-        return event.title is string &&
-               event.title.size() > 0 &&
-               event.start is timestamp &&
-               event.end is timestamp &&
-               event.familyId is string &&
-               event.userId is string &&
-               event.category in ['personal', 'family', 'work', 'holiday'];
+    match /users/{userId} {
+      allow read: if request.auth != null && 
+                  (request.auth.uid == userId || 
+                   exists(/databases/$(database)/documents/families/$(resource.data.familyId)) &&
+                   get(/databases/$(database)/documents/families/$(resource.data.familyId)).data.members.hasAny([request.auth.uid]));
+      
+      allow create: if request.auth != null && request.auth.uid == userId;
+      allow update: if request.auth != null && request.auth.uid == userId;
+    }
+
+    match /familyInvites/{inviteId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null &&
+                   exists(/databases/$(database)/documents/families/$(request.resource.data.familyId)) &&
+                   get(/databases/$(database)/documents/families/$(request.resource.data.familyId)).data.members.hasAny([request.auth.uid]);
+      allow update: if request.auth != null;
+    }
+
+    match /families/{familyId} {
+      allow read: if request.auth != null && 
+                  resource.data.members.hasAny([request.auth.uid]);
+      allow create: if request.auth != null;
+      allow update: if request.auth != null && 
+                   resource.data.members.hasAny([request.auth.uid]);
+
+      match /subUsers/{subUserId} {
+        allow read: if request.auth != null && 
+                    exists(/databases/$(database)/documents/families/$(familyId)) &&
+                    get(/databases/$(database)/documents/families/$(familyId)).data.members.hasAny([request.auth.uid]);
+        
+        allow update: if request.auth != null && 
+                     exists(/databases/$(database)/documents/families/$(familyId)) &&
+                     get(/databases/$(database)/documents/families/$(familyId)).data.members.hasAny([request.auth.uid]) &&
+                     (!request.resource.data.diff(resource.data).affectedKeys()
+                       .hasAny(['totalPoints']) || 
+                      request.resource.data.totalPoints == resource.data.totalPoints + 
+                        get(/databases/$(database)/documents/chores/$(request.resource.data.lastCompletedChoreId)).data.points);
+      }
+    }
+    
+    match /chores/{choreId} {
+      function isValidChore() {
+        let chore = request.resource.data;
+        return chore.title is string &&
+               chore.familyId is string &&
+               (chore.assignedTo == null || 
+                (chore.assignedTo.id is string &&
+                 chore.assignedTo.name is string &&
+                 chore.assignedTo.type in ['adult', 'child']));
       }
 
-      // Only family members can read their family's events
       allow read: if request.auth != null && 
-                 resource.data.familyId == request.auth.token.familyId;
+                 exists(/databases/$(database)/documents/families/$(resource.data.familyId)) &&
+                 get(/databases/$(database)/documents/families/$(resource.data.familyId)).data.members.hasAny([request.auth.uid]);
       
-      // Users can create events for their family
-      allow create: if request.auth != null && 
-                   request.resource.data.familyId == request.auth.token.familyId &&
-                   request.resource.data.userId == request.auth.uid &&
-                   isValidEvent();
+      allow create: if request.auth != null &&
+                   exists(/databases/$(database)/documents/families/$(request.resource.data.familyId)) &&
+                   get(/databases/$(database)/documents/families/$(request.resource.data.familyId)).data.members.hasAny([request.auth.uid]) &&
+                   isValidChore();
       
-      // Users can only update their own events within their family
-      allow update: if request.auth != null && 
-                   resource.data.familyId == request.auth.token.familyId &&
-                   resource.data.userId == request.auth.uid &&
-                   isValidEvent();
-      
-      // Users can only delete their own events
-      allow delete: if request.auth != null && 
-                   resource.data.familyId == request.auth.token.familyId &&
-                   resource.data.userId == request.auth.uid;
+      allow update, delete: if request.auth != null &&
+                           exists(/databases/$(database)/documents/families/$(resource.data.familyId)) &&
+                           get(/databases/$(database)/documents/families/$(resource.data.familyId)).data.members.hasAny([request.auth.uid]);
     }
   }
 } 
