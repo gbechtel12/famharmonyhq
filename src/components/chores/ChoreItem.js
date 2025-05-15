@@ -9,7 +9,9 @@ import {
   Box,
   Chip,
   Menu,
-  MenuItem
+  MenuItem,
+  Typography,
+  Stack
 } from '@mui/material';
 import {
   Edit as EditIcon,
@@ -105,16 +107,22 @@ function ChoreItem({ chore, onStatusChange, onEdit, onDelete, onToggleComplete }
         </ListItemIcon>
         <ListItemText
           primary={
-            <Box component="div" sx={{ fontSize: '1.1rem', fontWeight: 600 }}>
+            <Typography variant="subtitle1" component="span" sx={{ fontWeight: 600 }}>
               {chore.title} {chore.points > 0 && `🌟 ${chore.points} points`}
-            </Box>
+            </Typography>
           }
           secondary={
-            <Box component="div">
-              <Box component="div" sx={{ mt: 1 }}>
+            <>
+              <Typography variant="body2" component="span" sx={{ display: 'block', mt: 1 }}>
                 {chore.description}
-              </Box>
-              <Box sx={{ mt: 1, display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+              </Typography>
+              <Stack 
+                direction="row" 
+                spacing={1} 
+                sx={{ mt: 1 }}
+                flexWrap="wrap"
+                useFlexGap
+              >
                 <Chip
                   size="small"
                   label={currentStatus.label}
@@ -136,8 +144,8 @@ function ChoreItem({ chore, onStatusChange, onEdit, onDelete, onToggleComplete }
                     color="secondary"
                   />
                 )}
-              </Box>
-            </Box>
+              </Stack>
+            </>
           }
         />
         <ListItemSecondaryAction>

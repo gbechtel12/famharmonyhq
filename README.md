@@ -68,3 +68,15 @@ This section has moved here: [https://facebook.github.io/create-react-app/docs/d
 ### `npm run build` fails to minify
 
 This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)
+
+## Setting Up the Weather Widget
+
+The application includes a weather widget that requires an OpenWeatherMap API key:
+
+1. Sign up for a free API key at [OpenWeatherMap](https://openweathermap.org/api)
+2. Create a `.env` file in the root of your project
+3. Add the following line to your `.env` file:
+   ```
+   REACT_APP_OPENWEATHERMAP_API_KEY=your_api_key_here
+   ```
+4. Restart your development server for the changes to take effect

@@ -21,7 +21,9 @@ import {
   CalendarMonth,
   Assignment,
   Settings,
-  Logout
+  Logout,
+  Restaurant,
+  Stars as StarsIcon
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
@@ -76,6 +78,8 @@ export default function NavBar() {
   const navItems = [
     { path: '/calendar', label: 'Calendar', icon: <CalendarMonth /> },
     { path: '/chores', label: 'Chores', icon: <Assignment /> },
+    { path: '/rewards', label: 'Rewards', icon: <StarsIcon /> },
+    { path: '/meals', label: 'Meal Planner', icon: <Restaurant /> },
     { path: '/settings', label: 'Settings', icon: <Settings /> }
   ];
 

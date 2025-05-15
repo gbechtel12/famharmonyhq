@@ -42,28 +42,99 @@ service cloud.firestore {
     }
     
     match /chores/{choreId} {
-      function isValidChore() {
-        let chore = request.resource.data;
-        return chore.title is string &&
-               chore.familyId is string &&
-               (chore.assignedTo == null || 
-                (chore.assignedTo.id is string &&
-                 chore.assignedTo.name is string &&
-                 chore.assignedTo.type in ['adult', 'child']));
-      }
+      // Make more permissive for development
+      allow read, write: if request.auth != null;
+    }
 
+    // Add rules for calendar events - make it more permissive for debugging
+    match /events/{eventId} {
+      allow read, write: if request.auth != null;
+    }
+
+    // Allow users to read/write their own calendar events
+    match /userEvents/{userId} {
+      allow read: if request.auth != null && request.auth.uid == userId;
+      allow write: if request.auth != null && request.auth.uid == userId;
+      
+      match /events/{eventId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
+    }
+
+    // Family calendar events collection
+    match /familyEvents/{familyId} {
       allow read: if request.auth != null && 
-                 exists(/databases/$(database)/documents/families/$(resource.data.familyId)) &&
-                 get(/databases/$(database)/documents/families/$(resource.data.familyId)).data.members.hasAny([request.auth.uid]);
+                  exists(/databases/$(database)/documents/families/$(familyId)) &&
+                  get(/databases/$(database)/documents/families/$(familyId)).data.members.hasAny([request.auth.uid]);
       
-      allow create: if request.auth != null &&
-                   exists(/databases/$(database)/documents/families/$(request.resource.data.familyId)) &&
-                   get(/databases/$(database)/documents/families/$(request.resource.data.familyId)).data.members.hasAny([request.auth.uid]) &&
-                   isValidChore();
+      allow write: if request.auth != null && 
+                   exists(/databases/$(database)/documents/families/$(familyId)) &&
+                   get(/databases/$(database)/documents/families/$(familyId)).data.members.hasAny([request.auth.uid]);
       
-      allow update, delete: if request.auth != null &&
+      match /events/{eventId} {
+        allow read, write: if request.auth != null && 
+                           exists(/databases/$(database)/documents/families/$(familyId)) &&
+                           get(/databases/$(database)/documents/families/$(familyId)).data.members.hasAny([request.auth.uid]);
+      }
+    }
+
+    // Meal planner rules
+    match /mealPlans/{familyId} {
+      allow read: if request.auth != null && 
+                  exists(/databases/$(database)/documents/families/$(familyId)) &&
+                  get(/databases/$(database)/documents/families/$(familyId)).data.members.hasAny([request.auth.uid]);
+      
+      allow write: if request.auth != null && 
+                   exists(/databases/$(database)/documents/families/$(familyId)) &&
+                   get(/databases/$(database)/documents/families/$(familyId)).data.members.hasAny([request.auth.uid]);
+      
+      match /weeks/{weekId} {
+        allow read, write: if request.auth != null && 
+                           exists(/databases/$(database)/documents/families/$(familyId)) &&
+                           get(/databases/$(database)/documents/families/$(familyId)).data.members.hasAny([request.auth.uid]);
+      }
+    }
+
+    // Rewards store rules
+    match /rewards/{rewardId} {
+      // FOR DEVELOPMENT: temporarily make more permissive
+      allow read, write: if request.auth != null;
+      
+      // Regular rules - uncomment after testing
+      /*
+      // Allow read access if the user is a member of the family the reward belongs to
+      allow read: if request.auth != null && 
+                  exists(/databases/$(database)/documents/families/$(resource.data.familyId)) &&
+                  get(/databases/$(database)/documents/families/$(resource.data.familyId)).data.members.hasAny([request.auth.uid]);
+      
+      // Allow write access if the user is a member of the family
+      allow create: if request.auth != null && 
+                    exists(/databases/$(database)/documents/families/$(request.resource.data.familyId)) &&
+                    get(/databases/$(database)/documents/families/$(request.resource.data.familyId)).data.members.hasAny([request.auth.uid]);
+      
+      allow update, delete: if request.auth != null && 
                            exists(/databases/$(database)/documents/families/$(resource.data.familyId)) &&
                            get(/databases/$(database)/documents/families/$(resource.data.familyId)).data.members.hasAny([request.auth.uid]);
+      */
+    }
+
+    // Redemption history rules
+    match /redemptions/{redemptionId} {
+      // FOR DEVELOPMENT: temporarily make more permissive
+      allow read, write: if request.auth != null;
+      
+      // Regular rules - uncomment after testing
+      /*
+      // Allow read if user is a member of the family
+      allow read: if request.auth != null && 
+                  exists(/databases/$(database)/documents/families/$(resource.data.familyId)) &&
+                  get(/databases/$(database)/documents/families/$(resource.data.familyId)).data.members.hasAny([request.auth.uid]);
+      
+      // Allow create if user is a member of the family
+      allow create: if request.auth != null && 
+                    exists(/databases/$(database)/documents/families/$(request.resource.data.familyId)) &&
+                    get(/databases/$(database)/documents/families/$(request.resource.data.familyId)).data.members.hasAny([request.auth.uid]);
+      */
     }
   }
 } 

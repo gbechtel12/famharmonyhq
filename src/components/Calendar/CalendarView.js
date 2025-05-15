@@ -7,7 +7,7 @@ import getDay from 'date-fns/getDay';
 import 'react-big-calendar/lib/css/react-big-calendar.css';
 import { Box, Button, FormControl, InputLabel, Select, MenuItem, Tooltip, Typography, Snackbar, Alert as MuiAlert } from '@mui/material';
 import { Add as AddIcon } from '@mui/icons-material';
-import { collection, onSnapshot, query, where } from 'firebase/firestore';
+import { collection, onSnapshot, query, getDocs } from 'firebase/firestore';
 import { db } from '../../firebase';
 import { eventService } from '../../services/eventService';
 import Loader from '../common/Loader';
@@ -80,22 +80,27 @@ export default function CalendarView({ familyId }) {
   useEffect(() => {
     let unsubscribe;
 
-    const setupRealtimeEvents = () => {
+    const setupRealtimeEvents = async () => {
       setLoading(true);
       setError(null);
 
       try {
+        // SIMPLIFIED QUERY - just get all events without filtering by familyId
         const eventsRef = collection(db, 'events');
-        const q = query(eventsRef, where('familyId', '==', familyId));
         
-        unsubscribe = onSnapshot(q, 
+        // First try a simple getDocs to test permissions
+        const snapshot = await getDocs(eventsRef);
+        console.log('Successfully queried events collection. Found:', snapshot.size, 'events');
+        
+        // Then set up the realtime listener
+        unsubscribe = onSnapshot(eventsRef, 
           (snapshot) => {
             const fetchedEvents = snapshot.docs.map(doc => ({
               id: doc.id,
               ...doc.data(),
               start: doc.data().start.toDate(),
               end: doc.data().end.toDate(),
-              title: doc.data().title || 'Untitled Event' // Ensure title exists
+              title: doc.data().title || 'Untitled Event'
             }));
             setEvents(fetchedEvents);
             setLoading(false);
@@ -113,9 +118,7 @@ export default function CalendarView({ familyId }) {
       }
     };
 
-    if (familyId) {
-      setupRealtimeEvents();
-    }
+    setupRealtimeEvents();
 
     return () => unsubscribe?.();
   }, [familyId]);

@@ -19,6 +19,8 @@ const CalendarPage = React.lazy(() => import('./pages/CalendarPage'));
 const LoginPage = React.lazy(() => import('./pages/LoginPage'));
 const ChoresPage = React.lazy(() => import('./pages/ChoresPage'));
 const ProfilePage = React.lazy(() => import('./pages/ProfilePage'));
+const MealPlannerPage = React.lazy(() => import('./pages/MealPlannerPage'));
+const RewardsPage = React.lazy(() => import('./pages/RewardsPage'));
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth();
@@ -70,6 +72,26 @@ const router = createBrowserRouter(
           <ProtectedRoute>
             <Suspense fallback={<Loader message="Loading chores..." />}>
               <ChoresPage />
+            </Suspense>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="rewards"
+        element={
+          <ProtectedRoute>
+            <Suspense fallback={<Loader message="Loading rewards store..." />}>
+              <RewardsPage />
+            </Suspense>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="meals"
+        element={
+          <ProtectedRoute>
+            <Suspense fallback={<Loader message="Loading meal planner..." />}>
+              <MealPlannerPage />
             </Suspense>
           </ProtectedRoute>
         }
