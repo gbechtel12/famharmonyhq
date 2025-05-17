@@ -7,13 +7,14 @@ import {
   Navigate,
   Outlet 
 } from 'react-router-dom';
-import { ThemeProvider } from '@mui/material/styles';
+import { ThemeProvider as MuiThemeProvider } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { ThemeProvider, useThemeMode } from './contexts/ThemeContext';
 import Loader from './components/common/Loader';
 import ErrorBoundary from './components/common/ErrorBoundary';
 import NavBar from './components/NavBar';
-import theme from './theme';
+import getTheme from './theme';
 
 const CalendarPage = React.lazy(() => import('./pages/CalendarPage'));
 const LoginPage = React.lazy(() => import('./pages/LoginPage'));
@@ -21,6 +22,10 @@ const ChoresPage = React.lazy(() => import('./pages/ChoresPage'));
 const ProfilePage = React.lazy(() => import('./pages/ProfilePage'));
 const MealPlannerPage = React.lazy(() => import('./pages/MealPlannerPage'));
 const RewardsPage = React.lazy(() => import('./pages/RewardsPage'));
+const GroceryListPage = React.lazy(() => import('./pages/GroceryListPage'));
+const DailyAgendaPage = React.lazy(() => import('./pages/DailyAgendaPage'));
+const DashboardPage = React.lazy(() => import('./pages/DashboardPage'));
+const TailwindExample = React.lazy(() => import('./components/examples/TailwindExample'));
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth();
@@ -38,14 +43,19 @@ function ProtectedRoute({ children }) {
 
 function Root() {
   const { user } = useAuth();
+  const { themeMode } = useThemeMode();
+  const theme = getTheme(themeMode);
 
   return (
-    <div className="app-container">
-      {user && <NavBar />}
-      <main className="main-content">
-        <Outlet />
-      </main>
-    </div>
+    <MuiThemeProvider theme={theme}>
+      <CssBaseline />
+      <div className={`app-container ${themeMode === 'dark' ? 'dark-mode' : ''}`}>
+        {user && <NavBar />}
+        <main className="main-content">
+          <Outlet />
+        </main>
+      </div>
+    </MuiThemeProvider>
   );
 }
 
@@ -62,6 +72,26 @@ const router = createBrowserRouter(
           <ProtectedRoute>
             <Suspense fallback={<Loader message="Loading calendar..." />}>
               <CalendarPage />
+            </Suspense>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="agenda"
+        element={
+          <ProtectedRoute>
+            <Suspense fallback={<Loader message="Loading agenda..." />}>
+              <DailyAgendaPage />
+            </Suspense>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="dashboard"
+        element={
+          <ProtectedRoute>
+            <Suspense fallback={<Loader message="Loading dashboard..." />}>
+              <DashboardPage />
             </Suspense>
           </ProtectedRoute>
         }
@@ -97,6 +127,16 @@ const router = createBrowserRouter(
         }
       />
       <Route
+        path="grocery"
+        element={
+          <ProtectedRoute>
+            <Suspense fallback={<Loader message="Loading grocery list..." />}>
+              <GroceryListPage />
+            </Suspense>
+          </ProtectedRoute>
+        }
+      />
+      <Route
         path="settings"
         element={
           <ProtectedRoute>
@@ -114,6 +154,16 @@ const router = createBrowserRouter(
           </Suspense>
         }
       />
+      <Route
+        path="tailwind-example"
+        element={
+          <ProtectedRoute>
+            <Suspense fallback={<Loader message="Loading example..." />}>
+              <TailwindExample />
+            </Suspense>
+          </ProtectedRoute>
+        }
+      />
     </Route>
   ),
   {
@@ -127,8 +177,7 @@ const router = createBrowserRouter(
 function App() {
   return (
     <ErrorBoundary>
-      <ThemeProvider theme={theme}>
-        <CssBaseline />
+      <ThemeProvider>
         <AuthProvider>
           <RouterProvider router={router} />
         </AuthProvider>

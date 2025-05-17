@@ -60,6 +60,11 @@ service cloud.firestore {
         allow read, write: if request.auth != null && request.auth.uid == userId;
       }
     }
+    
+    // Allow access to the daily agenda data (consolidates events, chores, meals)
+    match /dailyAgenda/{agendaId} {
+      allow read: if request.auth != null;
+    }
 
     // Family calendar events collection
     match /familyEvents/{familyId} {
@@ -93,6 +98,14 @@ service cloud.firestore {
                            exists(/databases/$(database)/documents/families/$(familyId)) &&
                            get(/databases/$(database)/documents/families/$(familyId)).data.members.hasAny([request.auth.uid]);
       }
+    }
+
+    // Grocery list rules
+    match /groceryLists/{familyId} {
+      // Allow access if the user is a member of the family
+      allow read, write: if request.auth != null && 
+                         exists(/databases/$(database)/documents/families/$(familyId)) &&
+                         get(/databases/$(database)/documents/families/$(familyId)).data.members.hasAny([request.auth.uid]);
     }
 
     // Rewards store rules

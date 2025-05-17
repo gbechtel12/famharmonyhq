@@ -14,7 +14,13 @@ import {
   MenuItem,
   Box,
   Alert,
-  ListSubheader
+  ListSubheader,
+  FormControlLabel,
+  Checkbox,
+  FormGroup,
+  RadioGroup,
+  Radio,
+  InputAdornment
 } from '@mui/material';
 import {
   Add as AddIcon
@@ -50,8 +56,19 @@ function ChoresPage() {
     description: '',
     points: 0,
     assignedTo: '',
-    dueDate: ''
+    dueDate: '',
+    frequency: 'once',
+    totalInstances: 1,
+    completedInstances: 0,
+    isRecurring: false
   });
+
+  const FREQUENCY_OPTIONS = [
+    { value: 'once', label: 'One time task' },
+    { value: 'daily', label: 'Daily' },
+    { value: 'weekly', label: 'Weekly' },
+    { value: 'monthly', label: 'Monthly' }
+  ];
 
   const handleChange = useCallback((e) => {
     const { name, value } = e.target;
@@ -75,11 +92,17 @@ function ChoresPage() {
         assignedTo: assignedMember ? {
           id: assignedMember.id,
           name: assignedMember.name,
-          type: assignedMember.type
+          type: assignedMember.type,
+          color: assignedMember.color
         } : null,
         status: selectedChore?.status || 'todo',
         completed: false,
-        createdAt: new Date().toISOString()
+        earnedPoints: selectedChore?.earnedPoints || 0,
+        createdAt: selectedChore?.createdAt || new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        isRecurring: formData.frequency !== 'once',
+        totalInstances: formData.frequency !== 'once' ? formData.totalInstances : 1,
+        completedInstances: selectedChore?.completedInstances || 0
       };
 
       if (selectedChore) {
@@ -95,7 +118,11 @@ function ChoresPage() {
         description: '',
         points: 0,
         assignedTo: '',
-        dueDate: ''
+        dueDate: '',
+        frequency: 'once',
+        totalInstances: 1,
+        completedInstances: 0,
+        isRecurring: false
       });
     } catch (err) {
       console.error('Error saving chore:', err);
@@ -137,17 +164,29 @@ function ChoresPage() {
         updatedAt: new Date().toISOString()
       };
 
-      await updateDoc(choreRef, updates);
-
+      // If status is changing to done and it's a recurring task, increment completedInstances
       const chore = chores.find(c => c.id === choreId);
-      if (newStatus === 'done' && chore?.assignedTo?.type === 'child') {
-        const familyRef = doc(db, 'families', user.familyId);
-        const subUserRef = doc(familyRef, 'subUsers', chore.assignedTo.id);
-        await updateDoc(subUserRef, {
-          totalPoints: increment(chore.points || 0),
-          lastCompletedChoreId: choreId
-        });
+      if (newStatus === 'done' && chore && !chore.completed) {
+        if (chore.isRecurring && chore.completedInstances < chore.totalInstances) {
+          updates.completedInstances = (chore.completedInstances || 0) + 1;
+        }
+        
+        // Track the earned points
+        if (chore?.assignedTo?.type === 'child') {
+          const pointsEarned = chore.points || 0;
+          updates.earnedPoints = (chore.earnedPoints || 0) + pointsEarned;
+          
+          const familyRef = doc(db, 'families', user.familyId);
+          const subUserRef = doc(familyRef, 'subUsers', chore.assignedTo.id);
+          await updateDoc(subUserRef, {
+            totalPoints: increment(pointsEarned),
+            lastCompletedChoreId: choreId,
+            lastCompletedAt: new Date().toISOString()
+          });
+        }
       }
+
+      await updateDoc(choreRef, updates);
     } catch (err) {
       console.error('Error updating chore status:', err);
       setError('Failed to update chore status');

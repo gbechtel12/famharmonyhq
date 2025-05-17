@@ -1,8 +1,9 @@
 import React from 'react';
-import { Box, Paper, Typography } from '@mui/material';
+import { Box, Typography } from '@mui/material';
 import ChoreItem from './ChoreItem';
 import { DragDropContext, Droppable, Draggable } from 'react-beautiful-dnd';
 import { styled } from '@mui/material/styles';
+import { COLUMNS, COLUMN_TO_STATUS } from './choreConstants';
 
 // Styled component for the droppable area
 const DroppableColumn = styled('div')(({ theme, isDraggingOver }) => ({
@@ -14,39 +15,31 @@ const DroppableColumn = styled('div')(({ theme, isDraggingOver }) => ({
   gap: theme.spacing(1),
   transition: 'background-color 0.2s ease',
   borderRadius: theme.shape.borderRadius,
-  border: `1px solid ${theme.palette.divider}`
+  border: `1px solid ${theme.palette.divider}`,
+  boxShadow: isDraggingOver ? theme.shadows[3] : 'none'
 }));
 
 // Styled component for the draggable item
 const DraggableItem = styled('div')(({ theme, isDragging }) => ({
   opacity: isDragging ? 0.8 : 1,
-  margin: theme.spacing(0.5, 0)
+  margin: theme.spacing(0.5, 0),
+  transform: isDragging ? 'scale(1.02)' : 'scale(1)',
+  transition: 'transform 0.2s ease'
 }));
 
-const COLUMNS = {
-  todo: {
-    id: 'todo',
-    title: '📝 To Do',
-    statuses: ['todo', 'open']
-  },
-  in_progress: {
-    id: 'in_progress',
-    title: '🏃 In Progress',
-    statuses: ['in_progress']
-  },
-  done: {
-    id: 'done',
-    title: '✨ Done',
-    statuses: ['done']
-  }
-};
-
-// Mapping from column ID to status
-const COLUMN_TO_STATUS = {
-  todo: 'todo',
-  in_progress: 'in_progress',
-  done: 'done'
-};
+// Column header with title and count
+const ColumnHeader = styled(Typography)(({ theme, columnColor }) => ({
+  padding: theme.spacing(1),
+  marginBottom: theme.spacing(2),
+  borderRadius: theme.shape.borderRadius,
+  backgroundColor: columnColor ? `${columnColor}20` : 'transparent',
+  color: columnColor || theme.palette.text.primary,
+  fontWeight: 600,
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+  borderBottom: `2px solid ${columnColor || theme.palette.divider}`
+}));
 
 export default function KanbanBoard({ chores, onStatusChange, onEdit, onDelete, onToggleComplete }) {
   const getChoresByStatus = (statusArray) => {
@@ -75,7 +68,11 @@ export default function KanbanBoard({ chores, onStatusChange, onEdit, onDelete, 
       <Box
         sx={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(3, 1fr)',
+          gridTemplateColumns: {
+            xs: '1fr',
+            sm: 'repeat(2, 1fr)',
+            md: 'repeat(3, 1fr)'
+          },
           gap: 2,
           width: '100%',
           overflowX: 'auto',
@@ -90,10 +87,36 @@ export default function KanbanBoard({ chores, onStatusChange, onEdit, onDelete, 
                 ref={provided.innerRef}
                 isDraggingOver={snapshot.isDraggingOver}
               >
-                <Typography variant="h6" gutterBottom>
-                  {column.title} ({getChoresByStatus(column.statuses).length})
-                </Typography>
-                <Box sx={{ flexGrow: 1 }}>
+                <ColumnHeader variant="h6" columnColor={column.color}>
+                  {column.title}
+                  <Box
+                    component="span"
+                    sx={{
+                      bgcolor: column.color,
+                      color: '#fff',
+                      borderRadius: '50%',
+                      width: 24,
+                      height: 24,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: '0.75rem',
+                      fontWeight: 'bold'
+                    }}
+                  >
+                    {getChoresByStatus(column.statuses).length}
+                  </Box>
+                </ColumnHeader>
+                <Box 
+                  sx={{ 
+                    flexGrow: 1,
+                    minHeight: '100px',
+                    transition: 'background-color 0.2s ease',
+                    backgroundColor: snapshot.isDraggingOver ? `${column.color}10` : 'transparent',
+                    borderRadius: 1,
+                    padding: 1
+                  }}
+                >
                   {getChoresByStatus(column.statuses).map((chore, index) => (
                     <Draggable key={chore.id} draggableId={chore.id} index={index}>
                       {(provided, snapshot) => (

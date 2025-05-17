@@ -7,11 +7,49 @@
 .main-content {
   flex: 1;
   padding: 20px;
-  margin-top: 64px;
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
 }
 
+/* Medium screens */
+@media (min-width: 768px) and (max-width: 1024px) {
+  .main-content {
+    padding: 24px;
+  }
+}
+
+/* Large screens */
+@media (min-width: 1025px) {
+  .main-content {
+    padding: 32px;
+  }
+}
+
+/* Small screens */
 @media (max-width: 600px) {
   .main-content {
-    margin-top: 56px;
+    padding: 16px;
   }
+}
+
+/* Dark mode specific styles */
+.dark-mode .MuiPaper-root {
+  background-color: #1e1e1e;
+}
+
+/* Ensure all interactive elements have pointer cursor */
+.app-container a,
+.app-container button,
+.app-container [role="button"],
+.app-container .MuiIconButton-root,
+.app-container .MuiListItem-button,
+.app-container .nav-link,
+.app-container .cursor-pointer {
+  cursor: pointer !important;
+}
+
+/* Ensure Heroicons are visible */
+.app-container svg[class*="h-"] {
+  display: inline-block;
 }

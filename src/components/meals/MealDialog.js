@@ -13,9 +13,15 @@ import {
   FormControl,
   InputLabel,
   Select,
-  MenuItem
+  MenuItem,
+  FormControlLabel,
+  RadioGroup,
+  Radio,
+  Typography
 } from '@mui/material';
 import { Add as AddIcon } from '@mui/icons-material';
+import ShoppingBagIcon from '@mui/icons-material/ShoppingBag';
+import BackpackIcon from '@mui/icons-material/Backpack';
 
 const MEAL_TYPES = [
   { id: 'breakfast', label: 'Breakfast' },
@@ -34,13 +40,17 @@ const DAYS = [
   { id: 'saturday', label: 'Saturday' }
 ];
 
+// School days (typically Monday-Friday)
+const SCHOOL_DAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'];
+
 function MealDialog({ open, onClose, onSave, onDelete, meal, mealType, day }) {
   const [formData, setFormData] = useState({
     name: '',
     description: '',
     ingredients: [],
     mealType: '',
-    day: ''
+    day: '',
+    schoolLunchType: 'pack' // Default to 'pack'
   });
   const [newIngredient, setNewIngredient] = useState('');
   const [errors, setErrors] = useState({});
@@ -51,7 +61,8 @@ function MealDialog({ open, onClose, onSave, onDelete, meal, mealType, day }) {
         setFormData({
           ...meal,
           mealType: mealType || '',
-          day: day || ''
+          day: day || '',
+          schoolLunchType: meal.schoolLunchType || 'pack'
         });
       } else {
         setFormData({
@@ -59,7 +70,8 @@ function MealDialog({ open, onClose, onSave, onDelete, meal, mealType, day }) {
           description: '',
           ingredients: [],
           mealType: mealType || '',
-          day: day || ''
+          day: day || '',
+          schoolLunchType: 'pack'
         });
       }
       setNewIngredient('');
@@ -125,6 +137,7 @@ function MealDialog({ open, onClose, onSave, onDelete, meal, mealType, day }) {
         name: formData.name,
         description: formData.description,
         ingredients: formData.ingredients,
+        schoolLunchType: formData.schoolLunchType,
         // We exclude day and mealType from the saved object as they are handled by the parent component
       });
     }
@@ -136,6 +149,11 @@ function MealDialog({ open, onClose, onSave, onDelete, meal, mealType, day }) {
       handleAddIngredient();
     }
   };
+
+  // Check if this is a school lunch
+  const isSchoolDay = SCHOOL_DAYS.includes(formData.day);
+  const isLunch = formData.mealType === 'lunch';
+  const isSchoolLunch = isSchoolDay && isLunch;
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
@@ -188,6 +206,39 @@ function MealDialog({ open, onClose, onSave, onDelete, meal, mealType, day }) {
               </Select>
             </FormControl>
           </Box>
+          
+          {isSchoolLunch && (
+            <Box sx={{ border: '1px solid #e0e0e0', borderRadius: 1, p: 2, bgcolor: '#f5f5f5' }}>
+              <Typography variant="subtitle2" gutterBottom>
+                School Lunch Option
+              </Typography>
+              <RadioGroup
+                name="schoolLunchType"
+                value={formData.schoolLunchType}
+                onChange={handleChange}
+                row
+              >
+                <FormControlLabel 
+                  value="pack" 
+                  control={<Radio />} 
+                  label={
+                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                      <BackpackIcon sx={{ mr: 0.5 }} /> Pack Lunch
+                    </Box>
+                  } 
+                />
+                <FormControlLabel 
+                  value="buy" 
+                  control={<Radio />} 
+                  label={
+                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                      <ShoppingBagIcon sx={{ mr: 0.5 }} /> Buy Lunch
+                    </Box>
+                  } 
+                />
+              </RadioGroup>
+            </Box>
+          )}
           
           <TextField
             name="description"

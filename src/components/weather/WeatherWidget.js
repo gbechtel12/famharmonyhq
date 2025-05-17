@@ -54,9 +54,10 @@ const ForecastDay = styled(Box)(({ theme }) => ({
   minWidth: 90
 }));
 
-// Helper function to get the appropriate icon based on weather ID
+// Helper function to get the appropriate icon based on weather ID 
+// (We map weatherapi.com codes to these IDs in the weatherService)
 const getWeatherIcon = (weatherId, isNight = false) => {
-  // Weather condition codes: https://openweathermap.org/weather-conditions
+  // Weather condition codes are mapped from weatherapi.com to match OpenWeatherMap ranges
   if (weatherId >= 200 && weatherId < 300) {
     return <StormIcon color="warning" />;
   } else if (weatherId >= 300 && weatherId < 600) {
@@ -249,11 +250,11 @@ function WeatherWidget() {
           </Box>
           
           <Typography variant="h4" component="div" sx={{ fontWeight: 'bold', my: 1 }}>
-            {Math.round(weather.main.temp)}°C
+            {Math.round(weather.main.temp)}°F
           </Typography>
           
           <Typography variant="body2" color="text.secondary">
-            Feels like {Math.round(weather.main.feels_like)}°C
+            Feels like {Math.round(weather.main.feels_like)}°F
           </Typography>
           
           <Divider sx={{ my: 1 }} />

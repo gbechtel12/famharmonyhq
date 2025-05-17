@@ -21,6 +21,8 @@ import {
   Delete as DeleteIcon,
   Add as AddIcon
 } from '@mui/icons-material';
+import ShoppingBagIcon from '@mui/icons-material/ShoppingBag';  
+import BackpackIcon from '@mui/icons-material/Backpack';
 import MealDialog from './MealDialog';
 import { styled } from '@mui/material/styles';
 
@@ -72,6 +74,9 @@ const DAYS = [
   { id: 'saturday', label: 'Saturday' }
 ];
 
+// School days (typically Monday-Friday)
+const SCHOOL_DAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'];
+
 // Meal types
 const MEAL_TYPES = [
   { id: 'breakfast', label: 'Breakfast', color: '#4CAF50' },
@@ -120,35 +125,54 @@ function WeeklyMealPlanner({ mealPlan, onMealUpdate }) {
   };
 
   const handleDragEnd = (result) => {
-    const { destination, source, draggableId } = result;
-
-    // If dropped outside a droppable area
-    if (!destination) {
+    // Skip handling if dropped outside a droppable
+    if (!result.destination) {
       return;
     }
-
-    // If dropped in the same place
+    
+    const { source, destination } = result;
+    
+    // Skip if dropped in the same spot
     if (
-      destination.droppableId === source.droppableId &&
-      destination.index === source.index
+      source.droppableId === destination.droppableId
     ) {
       return;
     }
-
-    // Parse the IDs
+    
+    // Parse the droppable IDs to get day and meal type
     const [sourceDay, sourceMealType] = source.droppableId.split('-');
     const [destDay, destMealType] = destination.droppableId.split('-');
-
-    // Get the meal being moved
-    const mealToMove = getMealForDayAndType(sourceDay, sourceMealType);
-
-    if (mealToMove) {
-      // Remove from source
-      onMealUpdate(sourceDay, sourceMealType, null);
-      
-      // Add to destination
-      onMealUpdate(destDay, destMealType, mealToMove);
+    
+    // Get the meal from source
+    const meal = getMealForDayAndType(sourceDay, sourceMealType);
+    
+    if (!meal) {
+      return;
     }
+    
+    // Move the meal
+    onMealUpdate(sourceDay, sourceMealType, null); // Remove from source
+    onMealUpdate(destDay, destMealType, meal); // Add to destination
+  };
+  
+  // Check if a meal is a school lunch
+  const isSchoolLunch = (dayId, mealTypeId) => {
+    return SCHOOL_DAYS.includes(dayId) && mealTypeId === 'lunch';
+  };
+  
+  // Get school lunch icon
+  const getSchoolLunchIcon = (meal) => {
+    if (!meal || !meal.schoolLunchType) return null;
+    
+    return meal.schoolLunchType === 'buy' ? (
+      <Tooltip title="Buy School Lunch">
+        <ShoppingBagIcon fontSize="small" sx={{ color: '#f59e0b' }} />
+      </Tooltip>
+    ) : (
+      <Tooltip title="Pack Lunch">
+        <BackpackIcon fontSize="small" sx={{ color: '#10b981' }} />
+      </Tooltip>
+    );
   };
 
   return (
@@ -178,8 +202,13 @@ function WeeklyMealPlanner({ mealPlan, onMealUpdate }) {
                         }}
                       >
                         {mealType.label}
+                        {isSchoolLunch(day.id, mealType.id) && meal && (
+                          <Box component="span" sx={{ ml: 1 }}>
+                            {getSchoolLunchIcon(meal)}
+                          </Box>
+                        )}
                       </Typography>
-                      
+
                       <Droppable droppableId={droppableId}>
                         {(provided, snapshot) => (
                           <div
@@ -187,8 +216,9 @@ function WeeklyMealPlanner({ mealPlan, onMealUpdate }) {
                             {...provided.droppableProps}
                           >
                             {meal ? (
-                              <Draggable 
-                                draggableId={`meal-${day.id}-${mealType.id}`} 
+                              <Draggable
+                                key={`${day.id}-${mealType.id}-draggable`}
+                                draggableId={`${day.id}-${mealType.id}-draggable`}
                                 index={0}
                               >
                                 {(provided, snapshot) => (
@@ -196,14 +226,20 @@ function WeeklyMealPlanner({ mealPlan, onMealUpdate }) {
                                     ref={provided.innerRef}
                                     {...provided.draggableProps}
                                     {...provided.dragHandleProps}
-                                    style={provided.draggableProps.style}
-                                    elevation={snapshot.isDragging ? 3 : 1}
+                                    isDraggingOver={snapshot.isDragging}
                                   >
                                     <CardContent>
                                       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                                        <Typography variant="body1" sx={{ fontWeight: 'medium' }}>
-                                          {meal.name}
-                                        </Typography>
+                                        <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                                          <Typography variant="body1" sx={{ fontWeight: 'medium' }}>
+                                            {meal.name}
+                                          </Typography>
+                                          {isSchoolLunch(day.id, mealType.id) && (
+                                            <Box sx={{ ml: 1 }}>
+                                              {getSchoolLunchIcon(meal)}
+                                            </Box>
+                                          )}
+                                        </Box>
                                         <Box>
                                           <Tooltip title="Edit">
                                             <IconButton 

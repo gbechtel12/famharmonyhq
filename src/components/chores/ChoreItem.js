@@ -11,34 +11,22 @@ import {
   Menu,
   MenuItem,
   Typography,
-  Stack
+  Stack,
+  LinearProgress,
+  Badge,
+  Tooltip
 } from '@mui/material';
 import {
   Edit as EditIcon,
-  Delete as DeleteIcon
+  Delete as DeleteIcon,
+  Star as StarIcon,
+  Refresh as RefreshIcon,
+  AccessTime as TimeIcon
 } from '@mui/icons-material';
 import Confetti from 'react-confetti';
 import { useWindowSize } from 'react-use';
-
-// Update STATUS_CONFIG to include 'open' status and make 'todo' the default
-const STATUS_CONFIG = {
-  open: {
-    label: '📋 Open',
-    color: 'default'
-  },
-  todo: {
-    label: '📝 To Do',
-    color: 'info'
-  },
-  in_progress: {
-    label: '🏃 In Progress',
-    color: 'warning'
-  },
-  done: {
-    label: '✨ Done',
-    color: 'success'
-  }
-};
+import { formatDistanceToNow } from 'date-fns';
+import { STATUS_CONFIG } from './choreConstants';
 
 function ChoreItem({ chore, onStatusChange, onEdit, onDelete, onToggleComplete }) {
   const [anchorEl, setAnchorEl] = useState(null);
@@ -64,6 +52,18 @@ function ChoreItem({ chore, onStatusChange, onEdit, onDelete, onToggleComplete }
 
   // Add better status handling with fallback
   const currentStatus = STATUS_CONFIG[chore.status] || STATUS_CONFIG.open;
+  
+  // Calculate the progress for recurring tasks
+  const isRecurring = chore.frequency && chore.frequency !== 'once';
+  const progress = isRecurring && chore.completedInstances 
+    ? Math.min(100, (chore.completedInstances / chore.totalInstances) * 100)
+    : 0;
+  
+  // Format the last updated timestamp if available
+  const lastUpdated = chore.updatedAt ? formatDistanceToNow(new Date(chore.updatedAt), { addSuffix: true }) : '';
+  
+  // Calculate the total stars earned from this chore
+  const earnedStars = chore.earnedPoints || 0;
 
   return (
     <>
@@ -90,9 +90,31 @@ function ChoreItem({ chore, onStatusChange, onEdit, onDelete, onToggleComplete }
           '&:hover': {
             transform: 'translateX(5px)',
             boxShadow: 1
-          }
+          },
+          position: 'relative',
+          overflow: 'visible'
         }}
       >
+        {/* Star counter badge */}
+        {earnedStars > 0 && (
+          <Badge
+            badgeContent={earnedStars}
+            max={99}
+            color="warning"
+            sx={{
+              position: 'absolute',
+              top: -8,
+              right: -8,
+              '& .MuiBadge-badge': {
+                bgcolor: '#ffc107',
+                color: '#000'
+              }
+            }}
+          >
+            <StarIcon color="warning" />
+          </Badge>
+        )}
+        
         <ListItemIcon>
           <Checkbox
             checked={chore.completed}
@@ -108,7 +130,29 @@ function ChoreItem({ chore, onStatusChange, onEdit, onDelete, onToggleComplete }
         <ListItemText
           primary={
             <Typography variant="subtitle1" component="span" sx={{ fontWeight: 600 }}>
-              {chore.title} {chore.points > 0 && `🌟 ${chore.points} points`}
+              {chore.title} {chore.points > 0 && (
+                <Tooltip title={`Worth ${chore.points} points`}>
+                  <Chip
+                    icon={<StarIcon fontSize="small" />}
+                    label={chore.points}
+                    size="small"
+                    sx={{
+                      ml: 1,
+                      bgcolor: 'warning.light',
+                      color: 'warning.contrastText',
+                      fontWeight: 'bold',
+                      '& .MuiChip-icon': {
+                        color: 'inherit'
+                      }
+                    }}
+                  />
+                </Tooltip>
+              )}
+              {isRecurring && (
+                <Tooltip title="Recurring task">
+                  <RefreshIcon fontSize="small" sx={{ ml: 1, color: 'info.main' }} />
+                </Tooltip>
+              )}
             </Typography>
           }
           secondary={
@@ -116,6 +160,28 @@ function ChoreItem({ chore, onStatusChange, onEdit, onDelete, onToggleComplete }
               <Typography variant="body2" component="span" sx={{ display: 'block', mt: 1 }}>
                 {chore.description}
               </Typography>
+              
+              {/* Progress bar for recurring tasks */}
+              {isRecurring && (
+                <Box sx={{ mt: 1, mb: 1 }}>
+                  <Typography variant="caption" sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span>Progress</span>
+                    <span>{chore.completedInstances || 0} of {chore.totalInstances || 1}</span>
+                  </Typography>
+                  <LinearProgress 
+                    variant="determinate" 
+                    value={progress} 
+                    sx={{ 
+                      height: 8, 
+                      borderRadius: 4,
+                      '& .MuiLinearProgress-bar': {
+                        backgroundColor: currentStatus.color
+                      }
+                    }} 
+                  />
+                </Box>
+              )}
+              
               <Stack 
                 direction="row" 
                 spacing={1} 
@@ -123,26 +189,56 @@ function ChoreItem({ chore, onStatusChange, onEdit, onDelete, onToggleComplete }
                 flexWrap="wrap"
                 useFlexGap
               >
+                {/* Status badge */}
                 <Chip
                   size="small"
                   label={currentStatus.label}
-                  color={currentStatus.color}
                   onClick={handleStatusClick}
+                  sx={{
+                    bgcolor: currentStatus.bgcolor,
+                    color: currentStatus.textColor,
+                    borderColor: currentStatus.color,
+                    fontWeight: 500,
+                    '&:hover': {
+                      bgcolor: currentStatus.bgcolor,
+                      filter: 'brightness(0.95)'
+                    }
+                  }}
                 />
+                
                 {chore.assignedTo && (
                   <Chip
                     size="small"
-                    label={`👤 ${chore.assignedTo.name}`}
+                    label={`${chore.assignedTo.name}`}
                     variant="outlined"
                     color={chore.assignedTo.type === 'child' ? 'secondary' : 'default'}
+                    sx={{
+                      borderColor: chore.assignedTo.color || 'divider'
+                    }}
                   />
                 )}
                 {chore.dueDate && (
-                  <Chip
-                    size="small"
-                    label={`📅 Due: ${new Date(chore.dueDate).toLocaleDateString()}`}
-                    color="secondary"
-                  />
+                  <Tooltip title={`Due date: ${new Date(chore.dueDate).toLocaleDateString()}`}>
+                    <Chip
+                      size="small"
+                      label={new Date(chore.dueDate).toLocaleDateString()}
+                      color="secondary"
+                      variant="outlined"
+                    />
+                  </Tooltip>
+                )}
+                
+                {/* Last updated chip */}
+                {lastUpdated && (
+                  <Tooltip title={`Last updated: ${new Date(chore.updatedAt).toLocaleString()}`}>
+                    <Chip
+                      size="small"
+                      icon={<TimeIcon fontSize="small" />}
+                      label={lastUpdated}
+                      variant="outlined"
+                      sx={{ fontSize: '0.75rem' }}
+                    />
+                  </Tooltip>
                 )}
               </Stack>
             </>
@@ -170,6 +266,16 @@ function ChoreItem({ chore, onStatusChange, onEdit, onDelete, onToggleComplete }
               key={status}
               onClick={() => handleStatusChange(status)}
               selected={status === chore.status}
+              sx={{
+                '&.Mui-selected': {
+                  backgroundColor: config.bgcolor,
+                  color: config.textColor,
+                  '&:hover': {
+                    backgroundColor: config.bgcolor,
+                    filter: 'brightness(0.95)'
+                  }
+                }
+              }}
             >
               {config.label}
             </MenuItem>
