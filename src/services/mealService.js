@@ -39,6 +39,12 @@ const getCurrentWeekRange = () => {
 // School days (typically Monday-Friday)
 const SCHOOL_DAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'];
 
+// Family members with their lunch preferences
+const FAMILY_MEMBERS = [
+  { id: 'alex', name: 'Alex' },
+  { id: 'emma', name: 'Emma' }
+];
+
 export const mealService = {
   // Get the current week's meal plan
   async getCurrentWeekPlan(familyId) {
@@ -199,8 +205,14 @@ export const mealService = {
           prepTime: '15 min',
           cookTime: '5 min',
           description: 'Nutritious midday meal',
-          // Add school lunch type for school days
-          ...(isSchoolDay && { schoolLunchType: dayName === 'monday' || dayName === 'wednesday' || dayName === 'friday' ? 'buy' : 'pack' })
+          // School lunch types - now using per-child plans
+          ...(isSchoolDay && { 
+            schoolLunchType: dayName === 'monday' || dayName === 'wednesday' || dayName === 'friday' ? 'buy' : 'pack',
+            childLunchPlans: {
+              alex: dayName === 'monday' || dayName === 'wednesday' ? 'buy' : 'pack',
+              emma: dayName === 'friday' ? 'buy' : 'pack'
+            }
+          })
         },
         dinner: {
           name: this._getDinnerForDay(dayName),

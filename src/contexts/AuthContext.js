@@ -3,6 +3,7 @@ import {
   signInWithEmailAndPassword, 
   signInWithPopup,
   GoogleAuthProvider,
+  createUserWithEmailAndPassword,
   onAuthStateChanged,
   signOut
 } from 'firebase/auth';
@@ -24,31 +25,43 @@ export function AuthProvider({ children }) {
     const handleUser = async (currentUser) => {
       if (currentUser) {
         try {
+          console.log("Auth state changed, user is logged in:", currentUser.uid);
+          
           // Get or create user profile
           let userProfile = await userService.getUserProfile(currentUser.uid);
           
           if (!userProfile) {
+            console.log("Creating new user profile for:", currentUser.uid);
             // Create new user profile if it doesn't exist
             await userService.createUserProfile(currentUser.uid, {
               email: currentUser.email,
-              displayName: currentUser.displayName,
+              displayName: currentUser.displayName || currentUser.email.split('@')[0],
               photoURL: currentUser.photoURL,
               familyId: null // Initially no family
             });
             userProfile = await userService.getUserProfile(currentUser.uid);
           }
 
+          console.log("User profile loaded:", userProfile?.id, 
+                      "FamilyId:", userProfile?.familyId || 'none');
+          
           // Merge auth user with profile data
-          setUser({
+          const userWithProfile = {
             ...currentUser,
-            familyId: userProfile.familyId,
+            familyId: userProfile?.familyId || null,
+            displayName: userProfile?.displayName || currentUser.displayName || currentUser.email.split('@')[0],
+            color: userProfile?.color || null,
             // Add any other profile fields you need
-          });
+          };
+          
+          setUser(userWithProfile);
+          console.log("Auth context user state updated with familyId:", userWithProfile.familyId);
         } catch (error) {
           console.error('Error setting up user profile:', error);
           setAuthError(error);
         }
       } else {
+        console.log("Auth state changed, user is logged out");
         setUser(null);
       }
       setLoading(false);
@@ -63,6 +76,25 @@ export function AuthProvider({ children }) {
       return result;
     } catch (error) {
       console.error("Email sign-in error:", error);
+      throw error;
+    }
+  };
+
+  const signUpWithEmail = async (email, password, displayName) => {
+    try {
+      const result = await createUserWithEmailAndPassword(auth, email, password);
+      
+      // Create user profile
+      await userService.createUserProfile(result.user.uid, {
+        email,
+        displayName: displayName || email.split('@')[0],
+        photoURL: null,
+        familyId: null
+      });
+      
+      return result;
+    } catch (error) {
+      console.error("Email sign-up error:", error);
       throw error;
     }
   };
@@ -87,13 +119,54 @@ export function AuthProvider({ children }) {
     }
   };
 
+  const updateUserFamilyId = async (familyId) => {
+    try {
+      if (!user) throw new Error("User not authenticated");
+      
+      await userService.updateFamilyId(user.uid, familyId);
+      
+      // Update local user state
+      setUser(prevUser => ({
+        ...prevUser,
+        familyId
+      }));
+      
+      return true;
+    } catch (error) {
+      console.error("Error updating user family ID:", error);
+      throw error;
+    }
+  };
+
+  const updateUserProfile = async (profileData) => {
+    try {
+      if (!user) throw new Error("User not authenticated");
+      
+      await userService.updateUserProfile(user.uid, profileData);
+      
+      // Update local user state
+      setUser(prevUser => ({
+        ...prevUser,
+        ...profileData
+      }));
+      
+      return true;
+    } catch (error) {
+      console.error("Error updating user profile:", error);
+      throw error;
+    }
+  };
+
   const value = {
     user,
     loading,
     authError,
     signInWithEmail,
+    signUpWithEmail,
     signInWithGoogle,
-    logout
+    logout,
+    updateUserFamilyId,
+    updateUserProfile
   };
 
   return (

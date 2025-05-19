@@ -20,7 +20,8 @@ import {
   FormGroup,
   RadioGroup,
   Radio,
-  InputAdornment
+  InputAdornment,
+  Snackbar
 } from '@mui/material';
 import {
   Add as AddIcon
@@ -34,7 +35,8 @@ import {
   updateDoc, 
   deleteDoc, 
   doc, 
-  increment 
+  increment,
+  serverTimestamp
 } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useAuth } from '../contexts/AuthContext';
@@ -47,6 +49,7 @@ function ChoresPage() {
   const [chores, setChores] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [successMessage, setSuccessMessage] = useState('');
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedChore, setSelectedChore] = useState(null);
   const [submitting, setSubmitting] = useState(false);
@@ -83,6 +86,10 @@ function ChoresPage() {
     setSubmitting(true);
     
     try {
+      if (!user?.familyId) {
+        throw new Error('No family ID found. Please join or create a family first.');
+      }
+
       const assignedMember = familyMembers.find(m => m.id === formData.assignedTo);
       
       const choreData = {
@@ -98,18 +105,22 @@ function ChoresPage() {
         status: selectedChore?.status || 'todo',
         completed: false,
         earnedPoints: selectedChore?.earnedPoints || 0,
-        createdAt: selectedChore?.createdAt || new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
+        createdAt: selectedChore?.createdAt || serverTimestamp(),
+        updatedAt: serverTimestamp(),
         isRecurring: formData.frequency !== 'once',
         totalInstances: formData.frequency !== 'once' ? formData.totalInstances : 1,
         completedInstances: selectedChore?.completedInstances || 0
       };
 
       if (selectedChore) {
-        const choreRef = doc(db, 'chores', selectedChore.id);
+        // Update existing chore in families collection
+        const choreRef = doc(db, 'families', user.familyId, 'chores', selectedChore.id);
         await updateDoc(choreRef, choreData);
+        setSuccessMessage('Chore updated successfully');
       } else {
-        await addDoc(collection(db, 'chores'), choreData);
+        // Add new chore to families collection
+        await addDoc(collection(db, 'families', user.familyId, 'chores'), choreData);
+        setSuccessMessage('Chore created successfully');
       }
 
       setDialogOpen(false);
@@ -126,7 +137,7 @@ function ChoresPage() {
       });
     } catch (err) {
       console.error('Error saving chore:', err);
-      setError('Failed to save chore');
+      setError('Failed to save chore: ' + err.message);
     } finally {
       setSubmitting(false);
     }
@@ -134,34 +145,49 @@ function ChoresPage() {
 
   const handleToggleComplete = useCallback(async (choreId, currentStatus) => {
     try {
-      const choreRef = doc(db, 'chores', choreId);
+      if (!user?.familyId) {
+        throw new Error('No family ID found');
+      }
+
+      const choreRef = doc(db, 'families', user.familyId, 'chores', choreId);
       await updateDoc(choreRef, {
-        completed: !currentStatus
+        completed: !currentStatus,
+        updatedAt: serverTimestamp()
       });
+      setSuccessMessage(currentStatus ? 'Chore marked incomplete' : 'Chore marked complete');
     } catch (err) {
       console.error('Error updating chore:', err);
-      setError('Failed to update chore');
+      setError('Failed to update chore: ' + err.message);
     }
-  }, []);
+  }, [user?.familyId]);
 
   const handleDelete = useCallback(async (choreId) => {
-    if (window.confirm('Are you sure you want to delete this chore?')) {
-      try {
-        await deleteDoc(doc(db, 'chores', choreId));
-      } catch (err) {
-        console.error('Error deleting chore:', err);
-        setError('Failed to delete chore');
+    if (!window.confirm('Are you sure you want to delete this chore?')) return;
+    
+    try {
+      if (!user?.familyId) {
+        throw new Error('No family ID found');
       }
+
+      await deleteDoc(doc(db, 'families', user.familyId, 'chores', choreId));
+      setSuccessMessage('Chore deleted successfully');
+    } catch (err) {
+      console.error('Error deleting chore:', err);
+      setError('Failed to delete chore: ' + err.message);
     }
-  }, []);
+  }, [user?.familyId]);
 
   const handleStatusChange = async (choreId, newStatus) => {
     try {
-      const choreRef = doc(db, 'chores', choreId);
+      if (!user?.familyId) {
+        throw new Error('No family ID found');
+      }
+
+      const choreRef = doc(db, 'families', user.familyId, 'chores', choreId);
       const updates = {
         status: newStatus,
         completed: newStatus === 'done',
-        updatedAt: new Date().toISOString()
+        updatedAt: serverTimestamp()
       };
 
       // If status is changing to done and it's a recurring task, increment completedInstances
@@ -176,69 +202,122 @@ function ChoresPage() {
           const pointsEarned = chore.points || 0;
           updates.earnedPoints = (chore.earnedPoints || 0) + pointsEarned;
           
-          const familyRef = doc(db, 'families', user.familyId);
-          const subUserRef = doc(familyRef, 'subUsers', chore.assignedTo.id);
-          await updateDoc(subUserRef, {
-            totalPoints: increment(pointsEarned),
-            lastCompletedChoreId: choreId,
-            lastCompletedAt: new Date().toISOString()
-          });
+          // Update the family member's points in the subUsers collection
+          if (chore.assignedTo.id) {
+            const subUserRef = doc(db, 'families', user.familyId, 'subUsers', chore.assignedTo.id);
+            await updateDoc(subUserRef, {
+              totalPoints: increment(pointsEarned),
+              lastCompletedChoreId: choreId,
+              lastCompletedAt: serverTimestamp()
+            });
+          }
         }
       }
 
       await updateDoc(choreRef, updates);
+      setSuccessMessage('Chore status updated successfully');
     } catch (err) {
       console.error('Error updating chore status:', err);
-      setError('Failed to update chore status');
+      setError('Failed to update chore status: ' + err.message);
     }
   };
 
-  useEffect(() => {
-    let unsubscribe;
+  const handleEditChore = (chore) => {
+    setSelectedChore(chore);
+    setFormData({
+      title: chore.title || '',
+      description: chore.description || '',
+      points: chore.points || 0,
+      assignedTo: chore.assignedTo?.id || '',
+      dueDate: chore.dueDate || '',
+      frequency: chore.frequency || 'once',
+      totalInstances: chore.totalInstances || 1,
+      completedInstances: chore.completedInstances || 0,
+      isRecurring: chore.isRecurring || false
+    });
+    setDialogOpen(true);
+  };
 
-    if (user?.familyId) {
+  const handleAddChore = () => {
+    setSelectedChore(null);
+    setFormData({
+      title: '',
+      description: '',
+      points: 0,
+      assignedTo: '',
+      dueDate: '',
+      frequency: 'once',
+      totalInstances: 1,
+      completedInstances: 0,
+      isRecurring: false
+    });
+    setDialogOpen(true);
+  };
+
+  const handleCloseSnackbar = () => {
+    setSuccessMessage('');
+    setError(null);
+  };
+
+  useEffect(() => {
+    let unsubscribe = () => {};
+
+    const fetchChores = async () => {
+      if (!user?.familyId) {
+        setError('Please join or create a family to manage chores');
+        setLoading(false);
+        return;
+      }
+
       try {
-        const choresRef = collection(db, 'chores');
-        const q = query(
-          choresRef, 
-          where('familyId', '==', user.familyId)
-        );
+        setLoading(true);
         
-        unsubscribe = onSnapshot(q, (snapshot) => {
+        // Listen to chores in the families/{familyId}/chores collection
+        const choresRef = collection(db, 'families', user.familyId, 'chores');
+        
+        unsubscribe = onSnapshot(choresRef, (snapshot) => {
           const choresList = snapshot.docs.map(doc => ({
             id: doc.id,
-            ...doc.data()
+            ...doc.data(),
+            createdAt: doc.data().createdAt?.toDate?.() || new Date(),
+            updatedAt: doc.data().updatedAt?.toDate?.() || new Date(),
           }));
           setChores(choresList);
           setLoading(false);
         }, (err) => {
           console.error('Error loading chores:', err);
-          setError('Failed to load chores');
+          setError('Failed to load chores: ' + err.message);
           setLoading(false);
         });
       } catch (err) {
         console.error('Error setting up chores listener:', err);
-        setError('Failed to initialize chores');
+        setError('Failed to initialize chores: ' + err.message);
         setLoading(false);
       }
-    } else {
-      setError('Please join or create a family to manage chores');
-      setLoading(false);
-    }
+    };
 
-    return () => unsubscribe?.();
+    fetchChores();
+    return () => unsubscribe();
   }, [user?.familyId]);
 
   useEffect(() => {
     const loadFamilyMembers = async () => {
-      if (user?.familyId) {
-        try {
-          const members = await familyService.getAllFamilyMembers(user.familyId);
-          setFamilyMembers(members);
-        } catch (err) {
-          console.error('Error loading family members:', err);
-          setError('Failed to load family members');
-        }
+      if (!user?.familyId) {
+        console.warn('No family ID available for loading family members');
+        return;
+      }
+
+      try {
+        setLoading(true);
+        console.log('Loading family members with familyId:', user.familyId);
+        const members = await familyService.getAllFamilyMembers(user.familyId);
+        console.log('Family members loaded successfully:', members?.length);
+        setFamilyMembers(members || []);
+      } catch (err) {
+        console.error('Error loading family members:', err);
+        setError('Failed to load family members: ' + err.message);
+      } finally {
+        setLoading(false);
       }
     };
 
@@ -249,29 +328,34 @@ function ChoresPage() {
     return <Loader message="Loading chores..." />;
   }
 
+  const noFamilyMessage = !user?.familyId ? (
+    <Alert severity="info" sx={{ mb: 2 }}>
+      You need to join or create a family to manage chores.
+    </Alert>
+  ) : null;
+
+  const emptyChoresMessage = user?.familyId && chores.length === 0 ? (
+    <Alert severity="info" sx={{ mb: 2 }}>
+      No chores found. Add your first chore to get started!
+    </Alert>
+  ) : null;
+
   return (
     <Paper sx={{ p: 3, m: 2 }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 3 }}>
         <Typography variant="h4" gutterBottom>
           Family Chores
         </Typography>
-        <Button
-          variant="contained"
-          startIcon={<AddIcon />}
-          onClick={() => {
-            setSelectedChore(null);
-            setFormData({
-              title: '',
-              description: '',
-              points: 0,
-              assignedTo: '',
-              dueDate: ''
-            });
-            setDialogOpen(true);
-          }}
-        >
-          Add Chore
-        </Button>
+        {user?.familyId && (
+          <Button
+            variant="contained"
+            color="primary"
+            startIcon={<AddIcon />}
+            onClick={handleAddChore}
+          >
+            Add Chore
+          </Button>
+        )}
       </Box>
 
       {error && (
@@ -280,125 +364,181 @@ function ChoresPage() {
         </Alert>
       )}
 
-      <KanbanBoard
-        chores={chores}
-        onStatusChange={handleStatusChange}
-        onEdit={(chore) => {
-          setSelectedChore(chore);
-          setFormData({
-            title: chore.title,
-            description: chore.description || '',
-            points: chore.points || 0,
-            assignedTo: chore.assignedTo ? chore.assignedTo.id : '',
-            dueDate: chore.dueDate || ''
-          });
-          setDialogOpen(true);
-        }}
-        onDelete={handleDelete}
-        onToggleComplete={handleToggleComplete}
-      />
+      {noFamilyMessage}
+      {emptyChoresMessage}
+
+      {user?.familyId && chores.length > 0 && (
+        <KanbanBoard
+          chores={chores}
+          onStatusChange={handleStatusChange}
+          onEdit={handleEditChore}
+          onDelete={handleDelete}
+          onToggleComplete={handleToggleComplete}
+        />
+      )}
 
       <Dialog
         open={dialogOpen}
-        onClose={() => !submitting && setDialogOpen(false)}
-        maxWidth="sm"
+        onClose={() => setDialogOpen(false)}
         fullWidth
+        maxWidth="sm"
       >
         <DialogTitle>
-          {selectedChore ? 'Edit Chore' : 'New Chore'}
+          {selectedChore ? 'Edit Chore' : 'Add New Chore'}
         </DialogTitle>
         <DialogContent>
-          <Box component="form" onSubmit={handleSubmit} sx={{ mt: 1 }}>
+          <form onSubmit={handleSubmit}>
             <TextField
-              fullWidth
-              label="Title"
+              autoFocus
+              margin="dense"
               name="title"
+              label="Chore Title"
+              fullWidth
+              variant="outlined"
               value={formData.title}
               onChange={handleChange}
-              margin="normal"
               required
-              disabled={submitting}
+              sx={{ mb: 2 }}
             />
             <TextField
-              fullWidth
-              label="Description"
+              margin="dense"
               name="description"
+              label="Description"
+              fullWidth
               multiline
               rows={3}
+              variant="outlined"
               value={formData.description}
               onChange={handleChange}
-              margin="normal"
-              disabled={submitting}
+              sx={{ mb: 2 }}
             />
-            <FormControl fullWidth margin="normal">
-              <InputLabel>Assigned To</InputLabel>
+            <FormControl fullWidth margin="dense" sx={{ mb: 2 }}>
+              <InputLabel id="assign-to-label">Assign To</InputLabel>
               <Select
+                labelId="assign-to-label"
                 name="assignedTo"
                 value={formData.assignedTo}
+                label="Assign To"
                 onChange={handleChange}
-                disabled={submitting}
               >
-                <MenuItem value="">Unassigned</MenuItem>
-                <ListSubheader>Adults</ListSubheader>
-                {familyMembers
-                  .filter(m => m.type === 'adult')
-                  .map(member => (
-                    <MenuItem key={member.id} value={member.id}>
-                      {member.name}
-                    </MenuItem>
-                  ))
-                }
-                <ListSubheader>Children</ListSubheader>
-                {familyMembers
-                  .filter(m => m.type === 'child')
-                  .map(member => (
-                    <MenuItem key={member.id} value={member.id}>
-                      {member.name}
-                    </MenuItem>
-                  ))
-                }
+                <MenuItem value="">
+                  <em>Unassigned</em>
+                </MenuItem>
+                
+                {familyMembers.length > 0 ? (
+                  <>
+                    <ListSubheader>Adults</ListSubheader>
+                    {familyMembers
+                      .filter(member => member.type === 'adult')
+                      .map(member => (
+                        <MenuItem key={member.id} value={member.id}>
+                          {member.name}
+                        </MenuItem>
+                      ))}
+                    
+                    <ListSubheader>Children</ListSubheader>
+                    {familyMembers
+                      .filter(member => member.type === 'child')
+                      .map(member => (
+                        <MenuItem key={member.id} value={member.id}>
+                          {member.name}
+                        </MenuItem>
+                      ))}
+                  </>
+                ) : (
+                  <MenuItem disabled>No family members found</MenuItem>
+                )}
               </Select>
             </FormControl>
+            
             <TextField
-              fullWidth
-              label="Points"
+              margin="dense"
               name="points"
+              label="Points"
               type="number"
+              fullWidth
+              variant="outlined"
               value={formData.points}
               onChange={handleChange}
-              margin="normal"
-              disabled={submitting}
+              InputProps={{
+                inputProps: { min: 0 },
+                startAdornment: <InputAdornment position="start">🏆</InputAdornment>,
+              }}
+              sx={{ mb: 2 }}
             />
+            
             <TextField
-              fullWidth
-              label="Due Date"
+              margin="dense"
               name="dueDate"
+              label="Due Date"
               type="date"
+              fullWidth
+              variant="outlined"
               value={formData.dueDate}
               onChange={handleChange}
-              margin="normal"
-              disabled={submitting}
-              InputLabelProps={{ shrink: true }}
+              InputLabelProps={{
+                shrink: true,
+              }}
+              sx={{ mb: 2 }}
             />
-          </Box>
+            
+            <FormControl component="fieldset" sx={{ mb: 2 }}>
+              <Typography variant="subtitle1" gutterBottom>
+                Frequency
+              </Typography>
+              <RadioGroup
+                name="frequency"
+                value={formData.frequency}
+                onChange={handleChange}
+              >
+                {FREQUENCY_OPTIONS.map(option => (
+                  <FormControlLabel
+                    key={option.value}
+                    value={option.value}
+                    control={<Radio />}
+                    label={option.label}
+                  />
+                ))}
+              </RadioGroup>
+            </FormControl>
+            
+            {formData.frequency !== 'once' && (
+              <TextField
+                margin="dense"
+                name="totalInstances"
+                label="Total Instances"
+                type="number"
+                fullWidth
+                variant="outlined"
+                value={formData.totalInstances}
+                onChange={handleChange}
+                InputProps={{
+                  inputProps: { min: 1 },
+                }}
+                helperText="How many times this chore should be completed"
+                sx={{ mb: 2 }}
+              />
+            )}
+          </form>
         </DialogContent>
         <DialogActions>
+          <Button onClick={() => setDialogOpen(false)}>Cancel</Button>
           <Button 
-            onClick={() => setDialogOpen(false)}
+            onClick={handleSubmit} 
             disabled={submitting}
-          >
-            Cancel
-          </Button>
-          <Button 
-            onClick={handleSubmit}
             variant="contained"
-            color="primary"
-            disabled={submitting}
           >
             {submitting ? 'Saving...' : (selectedChore ? 'Update' : 'Create')}
           </Button>
         </DialogActions>
       </Dialog>
+
+      <Snackbar
+        open={!!successMessage || !!error}
+        autoHideDuration={6000}
+        onClose={handleCloseSnackbar}
+        message={successMessage || error}
+      />
     </Paper>
   );
 }

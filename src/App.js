@@ -10,6 +10,7 @@ import {
 import { ThemeProvider as MuiThemeProvider } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { FamilyProvider, useFamily } from './contexts/FamilyContext';
 import { ThemeProvider, useThemeMode } from './contexts/ThemeContext';
 import Loader from './components/common/Loader';
 import ErrorBoundary from './components/common/ErrorBoundary';
@@ -26,6 +27,23 @@ const GroceryListPage = React.lazy(() => import('./pages/GroceryListPage'));
 const DailyAgendaPage = React.lazy(() => import('./pages/DailyAgendaPage'));
 const DashboardPage = React.lazy(() => import('./pages/DashboardPage'));
 const TailwindExample = React.lazy(() => import('./components/examples/TailwindExample'));
+const FamilySetup = React.lazy(() => import('./components/family/FamilySetup'));
+
+function FamilyRedirect({ children }) {
+  const { user, loading: authLoading } = useAuth();
+  const { loading: familyLoading } = useFamily();
+  
+  if (authLoading || familyLoading) {
+    return <Loader message="Checking family status..." />;
+  }
+  
+  // If user has no family, redirect to setup
+  if (user && !user.familyId) {
+    return <Navigate to="/family-setup" replace />;
+  }
+  
+  return children;
+}
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth();
@@ -70,9 +88,11 @@ const router = createBrowserRouter(
         path="calendar"
         element={
           <ProtectedRoute>
-            <Suspense fallback={<Loader message="Loading calendar..." />}>
-              <CalendarPage />
-            </Suspense>
+            <FamilyRedirect>
+              <Suspense fallback={<Loader message="Loading calendar..." />}>
+                <CalendarPage />
+              </Suspense>
+            </FamilyRedirect>
           </ProtectedRoute>
         }
       />
@@ -80,9 +100,11 @@ const router = createBrowserRouter(
         path="agenda"
         element={
           <ProtectedRoute>
-            <Suspense fallback={<Loader message="Loading agenda..." />}>
-              <DailyAgendaPage />
-            </Suspense>
+            <FamilyRedirect>
+              <Suspense fallback={<Loader message="Loading agenda..." />}>
+                <DailyAgendaPage />
+              </Suspense>
+            </FamilyRedirect>
           </ProtectedRoute>
         }
       />
@@ -90,9 +112,11 @@ const router = createBrowserRouter(
         path="dashboard"
         element={
           <ProtectedRoute>
-            <Suspense fallback={<Loader message="Loading dashboard..." />}>
-              <DashboardPage />
-            </Suspense>
+            <FamilyRedirect>
+              <Suspense fallback={<Loader message="Loading dashboard..." />}>
+                <DashboardPage />
+              </Suspense>
+            </FamilyRedirect>
           </ProtectedRoute>
         }
       />
@@ -100,9 +124,11 @@ const router = createBrowserRouter(
         path="chores"
         element={
           <ProtectedRoute>
-            <Suspense fallback={<Loader message="Loading chores..." />}>
-              <ChoresPage />
-            </Suspense>
+            <FamilyRedirect>
+              <Suspense fallback={<Loader message="Loading chores..." />}>
+                <ChoresPage />
+              </Suspense>
+            </FamilyRedirect>
           </ProtectedRoute>
         }
       />
@@ -110,9 +136,11 @@ const router = createBrowserRouter(
         path="rewards"
         element={
           <ProtectedRoute>
-            <Suspense fallback={<Loader message="Loading rewards store..." />}>
-              <RewardsPage />
-            </Suspense>
+            <FamilyRedirect>
+              <Suspense fallback={<Loader message="Loading rewards store..." />}>
+                <RewardsPage />
+              </Suspense>
+            </FamilyRedirect>
           </ProtectedRoute>
         }
       />
@@ -120,9 +148,11 @@ const router = createBrowserRouter(
         path="meals"
         element={
           <ProtectedRoute>
-            <Suspense fallback={<Loader message="Loading meal planner..." />}>
-              <MealPlannerPage />
-            </Suspense>
+            <FamilyRedirect>
+              <Suspense fallback={<Loader message="Loading meal planner..." />}>
+                <MealPlannerPage />
+              </Suspense>
+            </FamilyRedirect>
           </ProtectedRoute>
         }
       />
@@ -130,9 +160,11 @@ const router = createBrowserRouter(
         path="grocery"
         element={
           <ProtectedRoute>
-            <Suspense fallback={<Loader message="Loading grocery list..." />}>
-              <GroceryListPage />
-            </Suspense>
+            <FamilyRedirect>
+              <Suspense fallback={<Loader message="Loading grocery list..." />}>
+                <GroceryListPage />
+              </Suspense>
+            </FamilyRedirect>
           </ProtectedRoute>
         }
       />
@@ -140,8 +172,20 @@ const router = createBrowserRouter(
         path="settings"
         element={
           <ProtectedRoute>
-            <Suspense fallback={<Loader message="Loading settings..." />}>
-              <ProfilePage />
+            <FamilyRedirect>
+              <Suspense fallback={<Loader message="Loading settings..." />}>
+                <ProfilePage />
+              </Suspense>
+            </FamilyRedirect>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="family-setup"
+        element={
+          <ProtectedRoute>
+            <Suspense fallback={<Loader message="Loading family setup..." />}>
+              <FamilySetup />
             </Suspense>
           </ProtectedRoute>
         }
@@ -179,7 +223,9 @@ function App() {
     <ErrorBoundary>
       <ThemeProvider>
         <AuthProvider>
-          <RouterProvider router={router} />
+          <FamilyProvider>
+            <RouterProvider router={router} />
+          </FamilyProvider>
         </AuthProvider>
       </ThemeProvider>
     </ErrorBoundary>

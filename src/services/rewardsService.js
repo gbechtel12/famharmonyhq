@@ -16,35 +16,39 @@ import { db } from '../firebase';
 export const rewardsService = {
   // Get all rewards for a family
   async getRewards(familyId) {
+    if (!familyId) {
+      throw new Error('Family ID is required');
+    }
+    
     try {
-      const rewardsRef = collection(db, 'rewards');
-      const q = query(rewardsRef, where('familyId', '==', familyId));
-      const querySnapshot = await getDocs(q);
+      // Use subcollection approach for better organization and security
+      const rewardsRef = collection(db, 'families', familyId, 'rewards');
+      const querySnapshot = await getDocs(rewardsRef);
       
       const rewards = querySnapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
       }));
       
-      // If no rewards found, return mock data
-      if (rewards.length === 0) {
-        return this._getMockRewards(familyId);
-      }
-      
       return rewards;
     } catch (error) {
       console.error('Error getting rewards:', error);
-      // Return mock data instead of throwing an error
-      return this._getMockRewards(familyId);
+      throw error;
     }
   },
 
   // Create a new reward
-  async createReward(rewardData) {
+  async createReward(familyId, rewardData) {
+    if (!familyId) {
+      throw new Error('Family ID is required');
+    }
+    
     try {
-      const rewardsRef = collection(db, 'rewards');
+      // Use subcollection approach
+      const rewardsRef = collection(db, 'families', familyId, 'rewards');
       const docRef = await addDoc(rewardsRef, {
         ...rewardData,
+        familyId, // Still include familyId in document for consistency
         createdAt: new Date().toISOString()
       });
       return { id: docRef.id, ...rewardData };
@@ -55,9 +59,13 @@ export const rewardsService = {
   },
 
   // Update an existing reward
-  async updateReward(rewardId, rewardData) {
+  async updateReward(familyId, rewardId, rewardData) {
+    if (!familyId) {
+      throw new Error('Family ID is required');
+    }
+    
     try {
-      const rewardRef = doc(db, 'rewards', rewardId);
+      const rewardRef = doc(db, 'families', familyId, 'rewards', rewardId);
       await updateDoc(rewardRef, {
         ...rewardData,
         updatedAt: new Date().toISOString()
@@ -70,9 +78,13 @@ export const rewardsService = {
   },
 
   // Delete a reward
-  async deleteReward(rewardId) {
+  async deleteReward(familyId, rewardId) {
+    if (!familyId) {
+      throw new Error('Family ID is required');
+    }
+    
     try {
-      const rewardRef = doc(db, 'rewards', rewardId);
+      const rewardRef = doc(db, 'families', familyId, 'rewards', rewardId);
       await deleteDoc(rewardRef);
       return rewardId;
     } catch (error) {
@@ -83,20 +95,22 @@ export const rewardsService = {
 
   // Redeem a reward for a child
   async redeemReward(familyId, childId, rewardId, pointsCost) {
+    if (!familyId) {
+      throw new Error('Family ID is required');
+    }
+    
     try {
       // Update the child's points
-      const familyRef = doc(db, 'families', familyId);
-      const childRef = doc(familyRef, 'subUsers', childId);
+      const childRef = doc(db, 'families', familyId, 'subUsers', childId);
       
       // Deduct points
       await updateDoc(childRef, {
         totalPoints: increment(-pointsCost)
       });
       
-      // Add to redemption history
-      const redemptionRef = collection(db, 'redemptions');
+      // Add to redemption history in family subcollection
+      const redemptionRef = collection(db, 'families', familyId, 'redemptions');
       await addDoc(redemptionRef, {
-        familyId,
         childId,
         rewardId,
         pointsCost,
@@ -112,11 +126,14 @@ export const rewardsService = {
 
   // Get redemption history for a child
   async getRedemptionHistory(familyId, childId) {
+    if (!familyId) {
+      throw new Error('Family ID is required');
+    }
+    
     try {
-      const redemptionsRef = collection(db, 'redemptions');
+      const redemptionsRef = collection(db, 'families', familyId, 'redemptions');
       const q = query(
         redemptionsRef, 
-        where('familyId', '==', familyId),
         where('childId', '==', childId)
       );
       
@@ -129,46 +146,5 @@ export const rewardsService = {
       console.error('Error getting redemption history:', error);
       throw error;
     }
-  },
-  
-  // Mock rewards data for development
-  _getMockRewards(familyId) {
-    return [
-      {
-        id: 'reward1',
-        name: 'Movie Night',
-        description: 'Choose a movie for family movie night',
-        pointCost: 100,
-        familyId: familyId,
-        assignedTo: 'child1', // Corresponds to Alex from family mock data
-        createdAt: new Date().toISOString()
-      },
-      {
-        id: 'reward2',
-        name: 'Extra Screen Time',
-        description: '30 minutes of extra screen time',
-        pointCost: 50,
-        familyId: familyId,
-        assignedTo: 'child1',
-        createdAt: new Date().toISOString()
-      },
-      {
-        id: 'reward3',
-        name: 'Choose Restaurant',
-        description: 'Choose where to eat out this weekend',
-        pointCost: 200,
-        familyId: familyId,
-        assignedTo: 'child2', // Corresponds to Taylor
-        createdAt: new Date().toISOString()
-      },
-      {
-        id: 'reward4',
-        name: 'New Video Game',
-        description: 'Get a new video game of your choice',
-        pointCost: 500,
-        familyId: familyId,
-        createdAt: new Date().toISOString()
-      }
-    ];
   }
 }; 

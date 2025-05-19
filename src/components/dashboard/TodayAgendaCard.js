@@ -9,7 +9,8 @@ import {
   Paper, 
   Divider,
   Tooltip,
-  Chip
+  Chip,
+  useTheme
 } from '@mui/material';
 import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
@@ -22,38 +23,33 @@ import RestaurantIcon from '@mui/icons-material/Restaurant';
 import ShoppingBagIcon from '@mui/icons-material/ShoppingBag';
 import BackpackIcon from '@mui/icons-material/Backpack';
 import { agendaService } from '../../services/agendaService';
-import { doc, getDoc } from 'firebase/firestore';
-import { db } from '../../firebase';
+import { useFamily } from '../../contexts/FamilyContext';
 import { format } from 'date-fns';
+import EmptyState from '../common/EmptyState';
+import ErrorState from '../common/ErrorState';
 
 // School days (typically Monday-Friday)
 const SCHOOL_DAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'];
 
 function TodayAgendaCard({ fullScreen = false }) {
+  const theme = useTheme();
+  const { family } = useFamily();
   const [isLoading, setIsLoading] = useState(true);
   const [todayItems, setTodayItems] = useState([]);
   const [error, setError] = useState(null);
   
   useEffect(() => {
     const loadData = async () => {
+      if (!family?.id) {
+        setIsLoading(false);
+        return;
+      }
+      
       try {
         setIsLoading(true);
         
-        // In a real app with authentication, you'd get familyId from context/user session
-        // Let's try to get the default family ID from Firestore
-        const defaultFamilyRef = doc(db, 'defaultFamily', 'current');
-        const defaultFamilyDoc = await getDoc(defaultFamilyRef);
-        
-        let familyId;
-        if (defaultFamilyDoc.exists() && defaultFamilyDoc.data().familyId) {
-          familyId = defaultFamilyDoc.data().familyId;
-        } else {
-          // Fallback to a sample family ID
-          familyId = 'defaultFamily123';
-        }
-        
-        // Get today's agenda items
-        const agendaItems = await agendaService.getDailyAgenda(familyId);
+        // Get today's agenda items using family ID from context
+        const agendaItems = await agendaService.getDailyAgenda(family.id);
         
         // Process items to match component's expected format
         const processedItems = (agendaItems || []).map(item => {
@@ -105,7 +101,7 @@ function TodayAgendaCard({ fullScreen = false }) {
     };
     
     loadData();
-  }, []);
+  }, [family]);
 
   // Sort items by time
   const sortedItems = [...todayItems].sort((a, b) => {
@@ -123,26 +119,52 @@ function TodayAgendaCard({ fullScreen = false }) {
   
   // Get school lunch icon
   const getSchoolLunchIcon = (item) => {
+    const iconColor = {
+      buy: theme.palette.mode === 'dark' ? '#fbbf24' : '#f59e0b',
+      pack: theme.palette.mode === 'dark' ? '#34d399' : '#10b981'
+    };
+    
     if (!item.schoolLunchType) return null;
     
     if (item.schoolLunchType === 'buy') {
       return (
         <Tooltip title="Buy School Lunch">
-          <ShoppingBagIcon fontSize="small" sx={{ color: '#f59e0b', ml: 1 }} />
+          <ShoppingBagIcon fontSize="small" sx={{ color: iconColor.buy, ml: 1 }} />
         </Tooltip>
       );
     } else {
       return (
         <Tooltip title="Pack Lunch">
-          <BackpackIcon fontSize="small" sx={{ color: '#10b981', ml: 1 }} />
+          <BackpackIcon fontSize="small" sx={{ color: iconColor.pack, ml: 1 }} />
         </Tooltip>
       );
     }
   };
 
+  // Define theme-aware card styles
+  const cardBackground = theme.palette.mode === 'dark' 
+    ? 'linear-gradient(to bottom right, #0c4a6e, #0369a1)' 
+    : 'linear-gradient(to bottom right, #e0f2fe, #dbeafe)';
+
+  const cardBorder = theme.palette.mode === 'dark' 
+    ? '1px solid #0284c7' 
+    : '1px solid #93c5fd';
+    
+  const headerBackground = theme.palette.mode === 'dark'
+    ? 'rgba(0, 0, 0, 0.2)'
+    : 'rgba(255, 255, 255, 0.7)';
+    
+  const iconColor = theme.palette.mode === 'dark'
+    ? '#60a5fa'
+    : '#2563eb';
+    
+  const timelineColor = theme.palette.mode === 'dark'
+    ? 'rgba(148, 163, 184, 0.4)'
+    : 'rgba(209, 213, 219, 0.8)';
+
   if (isLoading) {
     return (
-      <Card sx={{ height: '100%', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+      <Card sx={{ height: '100%', display: 'flex', justifyContent: 'center', alignItems: 'center' }} data-testid="agenda-card-loading">
         <CircularProgress size={28} />
       </Card>
     );
@@ -150,11 +172,62 @@ function TodayAgendaCard({ fullScreen = false }) {
   
   if (error || todayItems.length === 0) {
     return (
-      <Card sx={{ height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', p: 2 }}>
-        <CalendarTodayIcon sx={{ mb: 1, color: '#9ca3af' }} />
-        <Typography variant="body2" color="text.secondary">
-          {error || "No agenda items for today"}
-        </Typography>
+      <Card 
+        sx={{ 
+          height: '100%', 
+          background: cardBackground,
+          border: cardBorder,
+          overflow: 'hidden'
+        }}
+        data-testid="agenda-card-empty"
+      >
+        <CardHeader
+          title={
+            <Box sx={{ display: 'flex', alignItems: 'center' }}>
+              <CalendarTodayIcon sx={{ fontSize: 18, mr: 0.5, color: iconColor }} />
+              <Typography variant="subtitle1" fontWeight="medium">
+                Today's Agenda
+              </Typography>
+            </Box>
+          }
+          action={
+            <Typography variant="caption" color="text.secondary">
+              {format(new Date(), 'EEE, MMM d')}
+            </Typography>
+          }
+          sx={{ 
+            borderBottom: `1px solid ${theme.palette.divider}`,
+            backgroundColor: headerBackground,
+            py: 1.5,
+            px: 2
+          }}
+        />
+        <CardContent 
+          sx={{ 
+            display: 'flex', 
+            flexDirection: 'column',
+            justifyContent: 'center', 
+            alignItems: 'center', 
+            height: fullScreen ? 'calc(100vh - 160px)' : 'calc(100% - 65px)',
+            p: 3 
+          }}
+        >
+          {error ? (
+            <ErrorState 
+              title="Unable to load agenda" 
+              message="There was a problem loading your agenda items. Please try again later."
+              onRetry={() => window.location.reload()}
+            />
+          ) : (
+            <EmptyState 
+              title="Your day is clear" 
+              message="Nothing scheduled for today - enjoy your free time!"
+              icon={<CalendarTodayIcon />}
+              actionText="Schedule Event"
+              onAction={() => window.location.href = '/calendar'}
+            />
+          )}
+        </CardContent>
       </Card>
     );
   }
@@ -163,15 +236,16 @@ function TodayAgendaCard({ fullScreen = false }) {
     <Card 
       sx={{ 
         height: '100%', 
-        background: 'linear-gradient(to bottom right, #e0f2fe, #dbeafe)',
-        border: '1px solid #93c5fd',
+        background: cardBackground,
+        border: cardBorder,
         overflow: 'hidden'
       }}
+      data-testid="agenda-card"
     >
       <CardHeader
         title={
           <Box sx={{ display: 'flex', alignItems: 'center' }}>
-            <CalendarTodayIcon sx={{ fontSize: 18, mr: 0.5, color: '#2563eb' }} />
+            <CalendarTodayIcon sx={{ fontSize: 18, mr: 0.5, color: iconColor }} />
             <Typography variant="subtitle1" fontWeight="medium">
               Today's Agenda
             </Typography>
@@ -183,8 +257,8 @@ function TodayAgendaCard({ fullScreen = false }) {
           </Typography>
         }
         sx={{ 
-          borderBottom: '1px solid rgba(0, 0, 0, 0.08)',
-          backgroundColor: 'rgba(255, 255, 255, 0.7)',
+          borderBottom: `1px solid ${theme.palette.divider}`,
+          backgroundColor: headerBackground,
           py: 1.5,
           px: 2
         }}
@@ -197,6 +271,7 @@ function TodayAgendaCard({ fullScreen = false }) {
           maxHeight: fullScreen ? 'calc(100vh - 160px)' : '400px',
           position: 'relative'
         }}
+        data-testid="agenda-items-container"
       >
         {/* Timeline line */}
         <Box 
@@ -206,14 +281,20 @@ function TodayAgendaCard({ fullScreen = false }) {
             bottom: 0,
             left: 15,
             width: 2,
-            bgcolor: 'rgba(209, 213, 219, 0.8)'
+            bgcolor: timelineColor
           }}
         />
         
         {/* Timeline items */}
         <Box sx={{ '& > *:not(:last-child)': { mb: 1.5 } }}>
           {sortedItems.map((item) => (
-            <AgendaItem key={item.id} item={item} isSchoolLunch={isSchoolLunch(item)} getSchoolLunchIcon={getSchoolLunchIcon} />
+            <AgendaItem 
+              key={item.id} 
+              item={item} 
+              isSchoolLunch={isSchoolLunch(item)} 
+              getSchoolLunchIcon={getSchoolLunchIcon} 
+              theme={theme}
+            />
           ))}
         </Box>
       </CardContent>
@@ -222,15 +303,22 @@ function TodayAgendaCard({ fullScreen = false }) {
 }
 
 // AgendaItem component for each agenda item
-const AgendaItem = ({ item, isSchoolLunch, getSchoolLunchIcon }) => {
+const AgendaItem = ({ item, isSchoolLunch, getSchoolLunchIcon, theme }) => {
+  // Theme-aware icon colors
+  const iconColors = {
+    event: theme.palette.mode === 'dark' ? '#60a5fa' : '#2563eb',
+    chore: theme.palette.mode === 'dark' ? '#a78bfa' : '#9333ea',
+    meal: theme.palette.mode === 'dark' ? '#34d399' : '#059669'
+  };
+  
   const getItemIcon = () => {
     switch (item.type) {
       case 'event':
-        return <CalendarTodayIcon sx={{ fontSize: 18, color: '#2563eb' }} />;
+        return <CalendarTodayIcon sx={{ fontSize: 18, color: iconColors.event }} />;
       case 'chore':
-        return <AssignmentIcon sx={{ fontSize: 18, color: '#9333ea' }} />;
+        return <AssignmentIcon sx={{ fontSize: 18, color: iconColors.chore }} />;
       case 'meal':
-        return <RestaurantIcon sx={{ fontSize: 18, color: '#059669' }} />;
+        return <RestaurantIcon sx={{ fontSize: 18, color: iconColors.meal }} />;
       default:
         return <CalendarTodayIcon sx={{ fontSize: 18 }} />;
     }
@@ -240,140 +328,146 @@ const AgendaItem = ({ item, isSchoolLunch, getSchoolLunchIcon }) => {
     switch (item.type) {
       case 'event':
         return {
-          bg: 'rgba(219, 234, 254, 0.6)',
-          border: '#93c5fd'
+          bg: theme.palette.mode === 'dark' 
+            ? 'rgba(30, 58, 138, 0.4)' 
+            : 'rgba(219, 234, 254, 0.6)',
+          border: theme.palette.mode === 'dark'
+            ? '#1d4ed8'
+            : '#93c5fd'
         };
       case 'chore':
         return {
-          bg: 'rgba(237, 233, 254, 0.6)',
-          border: '#c4b5fd'
+          bg: theme.palette.mode === 'dark' 
+            ? 'rgba(76, 29, 149, 0.4)' 
+            : 'rgba(237, 233, 254, 0.6)',
+          border: theme.palette.mode === 'dark'
+            ? '#7e22ce'
+            : '#c4b5fd'
         };
       case 'meal':
         return {
-          bg: 'rgba(209, 250, 229, 0.6)',
-          border: '#6ee7b7'
+          bg: theme.palette.mode === 'dark' 
+            ? 'rgba(6, 78, 59, 0.4)' 
+            : 'rgba(209, 250, 229, 0.6)',
+          border: theme.palette.mode === 'dark'
+            ? '#047857'
+            : '#6ee7b7'
         };
       default:
         return {
-          bg: 'rgba(243, 244, 246, 0.6)',
-          border: '#d1d5db'
+          bg: theme.palette.mode === 'dark' 
+            ? 'rgba(30, 41, 59, 0.4)' 
+            : 'rgba(243, 244, 246, 0.6)',
+          border: theme.palette.mode === 'dark'
+            ? '#475569'
+            : '#d1d5db'
         };
     }
   };
   
   const colors = getItemColor();
+  const timeColor = theme.palette.mode === 'dark' ? '#94a3b8' : '#64748b';
   
   return (
-    <Paper
-      elevation={0}
-      sx={{
-        p: 2,
-        borderRadius: 2,
-        border: `1px solid ${colors.border}`,
-        backgroundColor: colors.bg,
-      }}
-    >
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-        <Box sx={{ display: 'flex', alignItems: 'center' }}>
-          <Box sx={{ mr: 1.5 }}>
-            {getItemIcon()}
-          </Box>
-          <Box>
-            <Box sx={{ display: 'flex', alignItems: 'center' }}>
-              <Typography variant="subtitle2" sx={{ fontWeight: 'medium' }}>
-                {item.title || item.name}
-              </Typography>
-              {item.completed && (
-                <CheckCircleIcon sx={{ ml: 0.5, fontSize: 16, color: '#10b981' }} />
-              )}
-              {isSchoolLunch && getSchoolLunchIcon(item)}
-            </Box>
-            
-            {item.type === 'meal' && (
-              <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
-                {item.mealType.charAt(0).toUpperCase() + item.mealType.slice(1)}
-              </Typography>
-            )}
-            
-            {item.type === 'chore' && item.assignedTo && (
-              <Box sx={{ display: 'flex', alignItems: 'center', mt: 0.5 }}>
-                <PersonIcon sx={{ fontSize: 14, mr: 0.5, color: 'text.secondary' }} />
-                <Typography variant="caption" color="text.secondary">
-                  {item.assignedTo}
-                </Typography>
-              </Box>
-            )}
-            
-            <Box sx={{ display: 'flex', alignItems: 'center', mt: 0.5 }}>
-              <AccessTimeIcon sx={{ fontSize: 14, mr: 0.5, color: 'text.secondary' }} />
-              <Typography variant="caption" color="text.secondary">
-                {item.time || item.dueTime || 'All day'}
-              </Typography>
-            </Box>
-          </Box>
-        </Box>
-        
-        {item.type === 'chore' && typeof item.points === 'number' && (
-          <Chip 
-            label={`${item.points} pts`} 
-            size="small"
-            sx={{ 
-              bgcolor: 'rgba(255, 255, 255, 0.8)',
-              fontWeight: 'medium',
-              fontSize: '0.675rem',
-              height: 22
-            }}
-          />
-        )}
+    <Box sx={{ display: 'flex', position: 'relative' }} data-testid={`agenda-item-${item.id}`}>
+      {/* Timeline dot */}
+      <Box 
+        sx={{
+          position: 'absolute',
+          top: 0,
+          left: 15,
+          width: 12,
+          height: 12,
+          borderRadius: '50%',
+          bgcolor: colors.border,
+          transform: 'translate(-50%, 0)',
+          zIndex: 1,
+          mt: 1
+        }}
+      />
+      
+      {/* Time */}
+      <Box 
+        sx={{ 
+          width: 46, 
+          pr: 2, 
+          textAlign: 'right',
+          mt: 0.5
+        }}
+        data-testid={`agenda-item-time-${item.id}`}
+      >
+        <Typography 
+          variant="caption" 
+          sx={{ 
+            fontWeight: 'medium',
+            color: timeColor
+          }}
+        >
+          {item.time || item.dueTime || '–:–'}
+        </Typography>
       </Box>
       
-      {item.description && (
-        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1, ml: 4 }}>
-          {item.description}
-        </Typography>
-      )}
-    </Paper>
+      {/* Content */}
+      <Paper
+        elevation={0}
+        sx={{
+          flex: 1,
+          ml: 2,
+          p: 1.5,
+          borderRadius: 2,
+          border: `1px solid ${colors.border}`,
+          backgroundColor: colors.bg
+        }}
+        data-testid={`agenda-item-content-${item.id}`}
+      >
+        <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+          <Box sx={{ display: 'flex', alignItems: 'center' }}>
+            {getItemIcon()}
+            <Typography 
+              variant="body2" 
+              sx={{ 
+                ml: 1, 
+                fontWeight: 'medium',
+                color: item.completed ? 'text.secondary' : 'text.primary',
+                textDecoration: item.completed ? 'line-through' : 'none'
+              }}
+            >
+              {item.title}
+            </Typography>
+          </Box>
+          
+          {item.completed && (
+            <Tooltip title="Completed">
+              <CheckCircleIcon 
+                fontSize="small" 
+                sx={{ 
+                  color: theme.palette.mode === 'dark' ? '#34d399' : '#10b981',
+                  ml: 1, 
+                  fontSize: 16 
+                }} 
+                data-testid={`agenda-item-completed-${item.id}`}
+              />
+            </Tooltip>
+          )}
+        </Box>
+        
+        {item.assignedTo && (
+          <Box sx={{ display: 'flex', alignItems: 'center', mt: 0.5 }}>
+            <PersonIcon sx={{ fontSize: 14, mr: 0.5, color: 'text.secondary' }} />
+            <Typography variant="caption" color="text.secondary">
+              {item.assignedTo}
+            </Typography>
+          </Box>
+        )}
+        
+        {item.type === 'meal' && item.mealType === 'lunch' && (
+          <Box sx={{ display: 'flex', alignItems: 'center', mt: 0.5 }}>
+            {isSchoolLunch(item) && getSchoolLunchIcon(item)}
+          </Box>
+        )}
+      </Paper>
+    </Box>
   );
 };
-
-// Mock data for testing
-function getMockAgendaItems() {
-  return [
-    {
-      type: 'event',
-      title: 'School Pickup',
-      time: '15:30',
-      description: 'Pick up kids from school'
-    },
-    {
-      type: 'meal',
-      mealType: 'breakfast',
-      name: 'Oatmeal with Fruit',
-      time: '07:30',
-      schoolLunchType: 'pack'
-    },
-    {
-      type: 'meal',
-      mealType: 'lunch',
-      name: 'Turkey Sandwich',
-      time: '12:30',
-      schoolLunchType: 'pack'
-    },
-    {
-      type: 'chore',
-      title: 'Take out trash',
-      assignedTo: 'Alex',
-      dueTime: '18:00',
-      points: 5,
-      completed: false
-    },
-    {
-      type: 'meal',
-      mealType: 'dinner',
-      name: 'Spaghetti Bolognese',
-      time: '18:30'
-    }
-  ];
-}
 
 export default TodayAgendaCard; 

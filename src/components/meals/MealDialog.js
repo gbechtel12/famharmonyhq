@@ -17,11 +17,18 @@ import {
   FormControlLabel,
   RadioGroup,
   Radio,
-  Typography
+  Typography,
+  Divider,
+  List,
+  ListItem,
+  ListItemText,
+  ListItemAvatar,
+  Avatar
 } from '@mui/material';
 import { Add as AddIcon } from '@mui/icons-material';
 import ShoppingBagIcon from '@mui/icons-material/ShoppingBag';
 import BackpackIcon from '@mui/icons-material/Backpack';
+import FaceIcon from '@mui/icons-material/Face';
 
 const MEAL_TYPES = [
   { id: 'breakfast', label: 'Breakfast' },
@@ -43,6 +50,12 @@ const DAYS = [
 // School days (typically Monday-Friday)
 const SCHOOL_DAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'];
 
+// Mock family members
+const FAMILY_MEMBERS = [
+  { id: 'alex', name: 'Alex', avatar: '👦', color: '#4f46e5' },
+  { id: 'emma', name: 'Emma', avatar: '👧', color: '#ec4899' }
+];
+
 function MealDialog({ open, onClose, onSave, onDelete, meal, mealType, day }) {
   const [formData, setFormData] = useState({
     name: '',
@@ -50,7 +63,11 @@ function MealDialog({ open, onClose, onSave, onDelete, meal, mealType, day }) {
     ingredients: [],
     mealType: '',
     day: '',
-    schoolLunchType: 'pack' // Default to 'pack'
+    schoolLunchType: 'pack', // Default for backward compatibility
+    childLunchPlans: {
+      alex: 'pack',
+      emma: 'pack'
+    }
   });
   const [newIngredient, setNewIngredient] = useState('');
   const [errors, setErrors] = useState({});
@@ -58,20 +75,46 @@ function MealDialog({ open, onClose, onSave, onDelete, meal, mealType, day }) {
   useEffect(() => {
     if (open) {
       if (meal) {
+        // Initialize childLunchPlans if it doesn't exist or convert schoolLunchType to childLunchPlans
+        let childPlans = meal.childLunchPlans || {};
+        
+        // If no childLunchPlans but there is a schoolLunchType, apply it to all children
+        if (!meal.childLunchPlans && meal.schoolLunchType) {
+          childPlans = FAMILY_MEMBERS.reduce((acc, child) => {
+            acc[child.id] = meal.schoolLunchType;
+            return acc;
+          }, {});
+        }
+        
+        // Make sure all children have a lunch plan
+        FAMILY_MEMBERS.forEach(child => {
+          if (!childPlans[child.id]) {
+            childPlans[child.id] = 'pack'; // Default
+          }
+        });
+        
         setFormData({
           ...meal,
           mealType: mealType || '',
           day: day || '',
-          schoolLunchType: meal.schoolLunchType || 'pack'
+          schoolLunchType: meal.schoolLunchType || 'pack',
+          childLunchPlans: childPlans
         });
       } else {
+        // Create default plans for all children
+        const defaultChildPlans = FAMILY_MEMBERS.reduce((acc, child) => {
+          acc[child.id] = 'pack';
+          return acc;
+        }, {});
+        
         setFormData({
           name: '',
           description: '',
           ingredients: [],
           mealType: mealType || '',
           day: day || '',
-          schoolLunchType: 'pack'
+          schoolLunchType: 'pack',
+          childLunchPlans: defaultChildPlans
         });
       }
       setNewIngredient('');
@@ -93,6 +136,16 @@ function MealDialog({ open, onClose, onSave, onDelete, meal, mealType, day }) {
         [name]: ''
       }));
     }
+  };
+
+  const handleChildLunchPlanChange = (childId, lunchPlan) => {
+    setFormData(prev => ({
+      ...prev,
+      childLunchPlans: {
+        ...prev.childLunchPlans,
+        [childId]: lunchPlan
+      }
+    }));
   };
 
   const handleAddIngredient = () => {
@@ -133,11 +186,22 @@ function MealDialog({ open, onClose, onSave, onDelete, meal, mealType, day }) {
 
   const handleSubmit = () => {
     if (validateForm()) {
+      // For backward compatibility, also set schoolLunchType to the most common choice
+      // among children (majority wins, or first child if tied)
+      const lunchTypes = Object.values(formData.childLunchPlans);
+      const counts = lunchTypes.reduce((acc, type) => {
+        acc[type] = (acc[type] || 0) + 1;
+        return acc;
+      }, {});
+      
+      const majorityType = Object.entries(counts).sort((a, b) => b[1] - a[1])[0][0];
+      
       onSave({
         name: formData.name,
         description: formData.description,
         ingredients: formData.ingredients,
-        schoolLunchType: formData.schoolLunchType,
+        schoolLunchType: majorityType, // For backward compatibility
+        childLunchPlans: formData.childLunchPlans,
         // We exclude day and mealType from the saved object as they are handled by the parent component
       });
     }
@@ -210,33 +274,53 @@ function MealDialog({ open, onClose, onSave, onDelete, meal, mealType, day }) {
           {isSchoolLunch && (
             <Box sx={{ border: '1px solid #e0e0e0', borderRadius: 1, p: 2, bgcolor: '#f5f5f5' }}>
               <Typography variant="subtitle2" gutterBottom>
-                School Lunch Option
+                School Lunch Options
               </Typography>
-              <RadioGroup
-                name="schoolLunchType"
-                value={formData.schoolLunchType}
-                onChange={handleChange}
-                row
-              >
-                <FormControlLabel 
-                  value="pack" 
-                  control={<Radio />} 
-                  label={
-                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                      <BackpackIcon sx={{ mr: 0.5 }} /> Pack Lunch
-                    </Box>
-                  } 
-                />
-                <FormControlLabel 
-                  value="buy" 
-                  control={<Radio />} 
-                  label={
-                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                      <ShoppingBagIcon sx={{ mr: 0.5 }} /> Buy Lunch
-                    </Box>
-                  } 
-                />
-              </RadioGroup>
+              <Divider sx={{ mb: 2 }} />
+              
+              <List>
+                {FAMILY_MEMBERS.map((child) => (
+                  <ListItem key={child.id} sx={{ px: 0, py: 1 }}>
+                    <ListItemAvatar>
+                      <Avatar 
+                        sx={{ 
+                          bgcolor: child.color,
+                          fontFamily: '"Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol"',
+                          fontSize: '1.2rem'
+                        }}
+                      >
+                        {child.avatar || <FaceIcon />}
+                      </Avatar>
+                    </ListItemAvatar>
+                    <ListItemText primary={child.name} />
+                    <RadioGroup
+                      name={`child-lunch-${child.id}`}
+                      value={formData.childLunchPlans[child.id] || 'pack'}
+                      onChange={(e) => handleChildLunchPlanChange(child.id, e.target.value)}
+                      row
+                    >
+                      <FormControlLabel 
+                        value="pack" 
+                        control={<Radio size="small" />} 
+                        label={
+                          <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                            <BackpackIcon sx={{ mr: 0.5, fontSize: '1.2rem' }} /> Pack
+                          </Box>
+                        } 
+                      />
+                      <FormControlLabel 
+                        value="buy" 
+                        control={<Radio size="small" />} 
+                        label={
+                          <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                            <ShoppingBagIcon sx={{ mr: 0.5, fontSize: '1.2rem' }} /> Buy
+                          </Box>
+                        } 
+                      />
+                    </RadioGroup>
+                  </ListItem>
+                ))}
+              </List>
             </Box>
           )}
           

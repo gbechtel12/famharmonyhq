@@ -33,9 +33,121 @@
   }
 }
 
+/* Navbar specific styles */
+.MuiAppBar-root {
+  transition: all 0.3s ease;
+}
+
+/* Light mode navbar styling */
+.MuiAppBar-root {
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+/* Subtle shadow animation on scroll */
+.MuiAppBar-root.scrolled {
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+}
+
+/* Enhance contrast for active navigation items */
+.MuiAppBar-root .MuiBox-root button.active {
+  position: relative;
+}
+
+.MuiAppBar-root .MuiBox-root button.active::after {
+  content: "";
+  position: absolute;
+  bottom: -2px;
+  left: 25%;
+  right: 25%;
+  height: 2px;
+  background-color: #4585f5;
+  border-radius: 2px;
+}
+
+/* Dark mode navbar styling */
+.dark-mode .MuiAppBar-root {
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+.dark-mode .MuiAppBar-root.scrolled {
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+
+.dark-mode .MuiAppBar-root .MuiBox-root button.active::after {
+  background-color: #79b0ff;
+}
+
+/* Navigation buttons */
+.nav-link {
+  padding: 6px 12px;
+  border-radius: 8px;
+  transition: all 0.2s ease;
+  font-weight: 500;
+}
+
+.nav-link:hover {
+  background-color: rgba(0, 0, 0, 0.04);
+  transform: translateY(-2px);
+}
+
+.dark-mode .nav-link:hover {
+  background-color: rgba(255, 255, 255, 0.05);
+}
+
+.nav-link-active {
+  font-weight: 600;
+  color: #4585f5;
+}
+
+.dark-mode .nav-link-active {
+  color: #79b0ff;
+}
+
+/* Improved focus styles for better accessibility */
+button:focus-visible,
+a:focus-visible,
+[role="button"]:focus-visible {
+  outline: 2px solid #4585f5;
+  outline-offset: 2px;
+}
+
+.dark-mode button:focus-visible,
+.dark-mode a:focus-visible,
+.dark-mode [role="button"]:focus-visible {
+  outline: 2px solid #79b0ff;
+}
+
 /* Dark mode specific styles */
+.dark-mode {
+  /* Better text rendering for dark mode */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
 .dark-mode .MuiPaper-root {
   background-color: #1e1e1e;
+}
+
+/* Improved dark mode card and paper styles */
+.dark-mode .MuiCard-root,
+.dark-mode .MuiPaper-root {
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+}
+
+/* Improved contrast for borders in dark mode */
+.dark-mode .MuiDivider-root {
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+/* Improve form components in dark mode */
+.dark-mode .MuiOutlinedInput-notchedOutline {
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.dark-mode .MuiInputBase-input::placeholder {
+  color: rgba(255, 255, 255, 0.5);
 }
 
 /* Ensure all interactive elements have pointer cursor */

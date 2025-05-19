@@ -1,153 +1,160 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isFamilyMember(familyId) {
+      return isAuthenticated() && 
+             exists(/databases/$(database)/documents/families/$(familyId)) &&
+             (get(/databases/$(database)/documents/families/$(familyId)).data.members.hasAny([request.auth.uid]) ||
+              get(/databases/$(database)/documents/users/$(request.auth.uid)).data.familyId == familyId);
+    }
+
+    function hasFamilyId(familyId) {
+      return isAuthenticated() &&
+             exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.familyId == familyId;
+    }
+
+    // User profiles
     match /users/{userId} {
-      allow read: if request.auth != null && 
+      allow read: if isAuthenticated() && 
                   (request.auth.uid == userId || 
-                   exists(/databases/$(database)/documents/families/$(resource.data.familyId)) &&
-                   get(/databases/$(database)/documents/families/$(resource.data.familyId)).data.members.hasAny([request.auth.uid]));
+                   exists(/databases/$(database)/documents/users/$(userId)) &&
+                   (isFamilyMember(resource.data.familyId) || hasFamilyId(resource.data.familyId)));
       
-      allow create: if request.auth != null && request.auth.uid == userId;
-      allow update: if request.auth != null && request.auth.uid == userId;
+      allow create: if isAuthenticated() && request.auth.uid == userId;
+      allow update: if isAuthenticated() && request.auth.uid == userId;
     }
 
+    // Family invites
     match /familyInvites/{inviteId} {
-      allow read: if request.auth != null;
-      allow create: if request.auth != null &&
-                   exists(/databases/$(database)/documents/families/$(request.resource.data.familyId)) &&
-                   get(/databases/$(database)/documents/families/$(request.resource.data.familyId)).data.members.hasAny([request.auth.uid]);
-      allow update: if request.auth != null;
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() &&
+                   (isFamilyMember(request.resource.data.familyId) || hasFamilyId(request.resource.data.familyId));
+      allow update: if isAuthenticated();
     }
 
+    // Families
     match /families/{familyId} {
-      allow read: if request.auth != null && 
-                  resource.data.members.hasAny([request.auth.uid]);
-      allow create: if request.auth != null;
-      allow update: if request.auth != null && 
-                   resource.data.members.hasAny([request.auth.uid]);
+      allow read: if isAuthenticated() && 
+                  (resource.data.members.hasAny([request.auth.uid]) || hasFamilyId(familyId));
+      allow create: if isAuthenticated();
+      allow update: if isAuthenticated() && 
+                   (resource.data.members.hasAny([request.auth.uid]) || hasFamilyId(familyId));
 
+      // All sub-collections in families
+      match /{document=**} {
+        allow read, write: if isFamilyMember(familyId) || hasFamilyId(familyId);
+      }
+
+      // Specific rules for subUsers
       match /subUsers/{subUserId} {
-        allow read: if request.auth != null && 
-                    exists(/databases/$(database)/documents/families/$(familyId)) &&
-                    get(/databases/$(database)/documents/families/$(familyId)).data.members.hasAny([request.auth.uid]);
+        allow read, write: if isFamilyMember(familyId) || hasFamilyId(familyId);
+      }
+
+      // Family rewards
+      match /rewards/{rewardId} {
+        allow read, write: if isFamilyMember(familyId) || hasFamilyId(familyId);
+      }
+      
+      // Family redemptions
+      match /redemptions/{redemptionId} {
+        allow read, write: if isFamilyMember(familyId) || hasFamilyId(familyId);
+      }
+      
+      // Family chores
+      match /chores/{choreId} {
+        allow read, write: if isFamilyMember(familyId) || hasFamilyId(familyId);
+      }
+      
+      // Family events
+      match /events/{eventId} {
+        allow read, write: if isFamilyMember(familyId) || hasFamilyId(familyId);
+      }
+      
+      // Family meal plans
+      match /mealPlans/{documentId} {
+        allow read, write: if isFamilyMember(familyId) || hasFamilyId(familyId);
         
-        allow update: if request.auth != null && 
-                     exists(/databases/$(database)/documents/families/$(familyId)) &&
-                     get(/databases/$(database)/documents/families/$(familyId)).data.members.hasAny([request.auth.uid]) &&
-                     (!request.resource.data.diff(resource.data).affectedKeys()
-                       .hasAny(['totalPoints']) || 
-                      request.resource.data.totalPoints == resource.data.totalPoints + 
-                        get(/databases/$(database)/documents/chores/$(request.resource.data.lastCompletedChoreId)).data.points);
+        match /weeks/{weekId} {
+          allow read, write: if isFamilyMember(familyId) || hasFamilyId(familyId);
+        }
+      }
+      
+      // Family grocery lists
+      match /groceryLists/{listId} {
+        allow read, write: if isFamilyMember(familyId) || hasFamilyId(familyId);
       }
     }
     
+    // Legacy direct collections (to maintain backward compatibility)
+    // Remove these after migrating all data to family subcollections
+    
     match /chores/{choreId} {
-      // Make more permissive for development
-      allow read, write: if request.auth != null;
+      allow read, write: if isAuthenticated() && 
+                         (resource == null || isFamilyMember(resource.data.familyId) || 
+                          hasFamilyId(resource.data.familyId));
     }
 
-    // Add rules for calendar events - make it more permissive for debugging
     match /events/{eventId} {
-      allow read, write: if request.auth != null;
+      allow read, write: if isAuthenticated() && 
+                         (resource == null || isFamilyMember(resource.data.familyId) ||
+                          hasFamilyId(resource.data.familyId));
     }
 
     // Allow users to read/write their own calendar events
     match /userEvents/{userId} {
-      allow read: if request.auth != null && request.auth.uid == userId;
-      allow write: if request.auth != null && request.auth.uid == userId;
+      allow read, write: if isAuthenticated() && request.auth.uid == userId;
       
       match /events/{eventId} {
-        allow read, write: if request.auth != null && request.auth.uid == userId;
+        allow read, write: if isAuthenticated() && request.auth.uid == userId;
       }
     }
     
     // Allow access to the daily agenda data (consolidates events, chores, meals)
     match /dailyAgenda/{agendaId} {
-      allow read: if request.auth != null;
+      allow read: if isAuthenticated();
     }
 
-    // Family calendar events collection
+    // Family calendar events collection (legacy)
     match /familyEvents/{familyId} {
-      allow read: if request.auth != null && 
-                  exists(/databases/$(database)/documents/families/$(familyId)) &&
-                  get(/databases/$(database)/documents/families/$(familyId)).data.members.hasAny([request.auth.uid]);
-      
-      allow write: if request.auth != null && 
-                   exists(/databases/$(database)/documents/families/$(familyId)) &&
-                   get(/databases/$(database)/documents/families/$(familyId)).data.members.hasAny([request.auth.uid]);
+      allow read, write: if isFamilyMember(familyId) || hasFamilyId(familyId);
       
       match /events/{eventId} {
-        allow read, write: if request.auth != null && 
-                           exists(/databases/$(database)/documents/families/$(familyId)) &&
-                           get(/databases/$(database)/documents/families/$(familyId)).data.members.hasAny([request.auth.uid]);
+        allow read, write: if isFamilyMember(familyId) || hasFamilyId(familyId);
       }
     }
 
-    // Meal planner rules
+    // Legacy meal planner rules
     match /mealPlans/{familyId} {
-      allow read: if request.auth != null && 
-                  exists(/databases/$(database)/documents/families/$(familyId)) &&
-                  get(/databases/$(database)/documents/families/$(familyId)).data.members.hasAny([request.auth.uid]);
-      
-      allow write: if request.auth != null && 
-                   exists(/databases/$(database)/documents/families/$(familyId)) &&
-                   get(/databases/$(database)/documents/families/$(familyId)).data.members.hasAny([request.auth.uid]);
+      allow read, write: if isFamilyMember(familyId) || hasFamilyId(familyId);
       
       match /weeks/{weekId} {
-        allow read, write: if request.auth != null && 
-                           exists(/databases/$(database)/documents/families/$(familyId)) &&
-                           get(/databases/$(database)/documents/families/$(familyId)).data.members.hasAny([request.auth.uid]);
+        allow read, write: if isFamilyMember(familyId) || hasFamilyId(familyId);
       }
     }
 
-    // Grocery list rules
+    // Legacy grocery list rules
     match /groceryLists/{familyId} {
-      // Allow access if the user is a member of the family
-      allow read, write: if request.auth != null && 
-                         exists(/databases/$(database)/documents/families/$(familyId)) &&
-                         get(/databases/$(database)/documents/families/$(familyId)).data.members.hasAny([request.auth.uid]);
+      allow read, write: if isFamilyMember(familyId) || hasFamilyId(familyId);
     }
 
-    // Rewards store rules
+    // Legacy rewards store rules
     match /rewards/{rewardId} {
-      // FOR DEVELOPMENT: temporarily make more permissive
-      allow read, write: if request.auth != null;
-      
-      // Regular rules - uncomment after testing
-      /*
-      // Allow read access if the user is a member of the family the reward belongs to
-      allow read: if request.auth != null && 
-                  exists(/databases/$(database)/documents/families/$(resource.data.familyId)) &&
-                  get(/databases/$(database)/documents/families/$(resource.data.familyId)).data.members.hasAny([request.auth.uid]);
-      
-      // Allow write access if the user is a member of the family
-      allow create: if request.auth != null && 
-                    exists(/databases/$(database)/documents/families/$(request.resource.data.familyId)) &&
-                    get(/databases/$(database)/documents/families/$(request.resource.data.familyId)).data.members.hasAny([request.auth.uid]);
-      
-      allow update, delete: if request.auth != null && 
-                           exists(/databases/$(database)/documents/families/$(resource.data.familyId)) &&
-                           get(/databases/$(database)/documents/families/$(resource.data.familyId)).data.members.hasAny([request.auth.uid]);
-      */
+      allow read, write: if isAuthenticated() && 
+                         (resource == null || isFamilyMember(resource.data.familyId) ||
+                          hasFamilyId(resource.data.familyId));
     }
 
-    // Redemption history rules
+    // Legacy redemption history rules
     match /redemptions/{redemptionId} {
-      // FOR DEVELOPMENT: temporarily make more permissive
-      allow read, write: if request.auth != null;
-      
-      // Regular rules - uncomment after testing
-      /*
-      // Allow read if user is a member of the family
-      allow read: if request.auth != null && 
-                  exists(/databases/$(database)/documents/families/$(resource.data.familyId)) &&
-                  get(/databases/$(database)/documents/families/$(resource.data.familyId)).data.members.hasAny([request.auth.uid]);
-      
-      // Allow create if user is a member of the family
-      allow create: if request.auth != null && 
-                    exists(/databases/$(database)/documents/families/$(request.resource.data.familyId)) &&
-                    get(/databases/$(database)/documents/families/$(request.resource.data.familyId)).data.members.hasAny([request.auth.uid]);
-      */
+      allow read, write: if isAuthenticated() && 
+                         (resource == null || isFamilyMember(resource.data.familyId) ||
+                          hasFamilyId(resource.data.familyId));
     }
   }
 } 

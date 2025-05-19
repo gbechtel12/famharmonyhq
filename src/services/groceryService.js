@@ -20,7 +20,8 @@ export const groceryService = {
   // Get the current grocery list for a family
   async getGroceryList(familyId) {
     try {
-      const docRef = doc(db, 'groceryLists', familyId);
+      // Use the subcollection in families collection
+      const docRef = doc(db, 'families', familyId, 'groceryLists', 'current');
       const docSnap = await getDoc(docRef);
       
       if (docSnap.exists()) {
@@ -45,7 +46,7 @@ export const groceryService = {
   // Add a new grocery item
   async addGroceryItem(familyId, item) {
     try {
-      const groceryListRef = doc(db, 'groceryLists', familyId);
+      const groceryListRef = doc(db, 'families', familyId, 'groceryLists', 'current');
       const groceryListSnap = await getDoc(groceryListRef);
       
       const newItem = {
@@ -83,7 +84,7 @@ export const groceryService = {
   // Update a grocery item (e.g., mark as completed)
   async updateGroceryItem(familyId, itemId, updates) {
     try {
-      const groceryListRef = doc(db, 'groceryLists', familyId);
+      const groceryListRef = doc(db, 'families', familyId, 'groceryLists', 'current');
       const groceryListSnap = await getDoc(groceryListRef);
       
       if (!groceryListSnap.exists()) {
@@ -115,7 +116,7 @@ export const groceryService = {
   // Remove a grocery item
   async removeGroceryItem(familyId, itemId) {
     try {
-      const groceryListRef = doc(db, 'groceryLists', familyId);
+      const groceryListRef = doc(db, 'families', familyId, 'groceryLists', 'current');
       const groceryListSnap = await getDoc(groceryListRef);
       
       if (!groceryListSnap.exists()) {
@@ -148,7 +149,7 @@ export const groceryService = {
         return { success: true, count: 0 };
       }
       
-      const groceryListRef = doc(db, 'groceryLists', familyId);
+      const groceryListRef = doc(db, 'families', familyId, 'groceryLists', 'current');
       const groceryListSnap = await getDoc(groceryListRef);
       
       // Convert ingredients to grocery items
@@ -213,7 +214,7 @@ export const groceryService = {
   // Clear completed items
   async clearCompletedItems(familyId) {
     try {
-      const groceryListRef = doc(db, 'groceryLists', familyId);
+      const groceryListRef = doc(db, 'families', familyId, 'groceryLists', 'current');
       const groceryListSnap = await getDoc(groceryListRef);
       
       if (!groceryListSnap.exists()) {

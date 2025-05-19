@@ -24,6 +24,7 @@ export const agendaService = {
   // Get all agenda items for a specific day
   async getDailyAgenda(familyId, date = new Date()) {
     if (!familyId) {
+      console.error('Family ID is required for getDailyAgenda');
       throw new Error('Family ID is required');
     }
 
@@ -82,24 +83,23 @@ export const agendaService = {
         return 0;
       });
       
-      if (agendaItems.length === 0) {
-        // If no real data is found, return mock data for development
-        return this._getMockAgenda();
-      }
-      
       return agendaItems;
     } catch (error) {
       console.error('Error getting daily agenda:', error);
-      // Return mock data for development instead of throwing an error
-      return this._getMockAgenda();
+      throw error;
     }
   },
   
   // Get calendar events for the family
   async getCalendarEvents(familyId, dayBoundary) {
+    if (!familyId) {
+      console.error('Family ID is required for getCalendarEvents');
+      throw new Error('Family ID is required');
+    }
+
     try {
-      // Query family events
-      const eventsRef = collection(db, 'familyEvents', familyId, 'events');
+      // Query family events from subcollection
+      const eventsRef = collection(db, 'families', familyId, 'events');
       const q = query(
         eventsRef,
         where('startTime', '>=', dayBoundary.start),
@@ -116,17 +116,21 @@ export const agendaService = {
       return events;
     } catch (error) {
       console.error('Error getting calendar events:', error);
-      return [];
+      throw error;
     }
   },
   
   // Get chores for the family
   async getChores(familyId, date) {
+    if (!familyId) {
+      console.error('Family ID is required for getChores');
+      throw new Error('Family ID is required');
+    }
+
     try {
-      // Get chores for the family
-      const choresRef = collection(db, 'chores');
-      const q = query(choresRef, where('familyId', '==', familyId));
-      const choreDocs = await getDocs(q);
+      // Get chores from family subcollection
+      const choresRef = collection(db, 'families', familyId, 'chores');
+      const choreDocs = await getDocs(choresRef);
       
       const today = format(date, 'yyyy-MM-dd');
       
@@ -185,151 +189,56 @@ export const agendaService = {
       return chores;
     } catch (error) {
       console.error('Error getting chores:', error);
-      return [];
+      throw error;
     }
   },
   
-  // Get meals for the day
+  // Get meals for a day
   async getMeals(familyId, dayId) {
+    if (!familyId) {
+      console.error('Family ID is required for getMeals');
+      throw new Error('Family ID is required');
+    }
+
     try {
-      // Get the current week's meal plan
-      const weekRange = this.getCurrentWeekRange();
-      const weekDocRef = doc(db, 'mealPlans', familyId, 'weeks', weekRange.weekId);
-      const weekDoc = await getDoc(weekDocRef);
+      // Get the current meal plan
+      const mealPlanRef = doc(db, 'families', familyId, 'mealPlans', 'current');
+      const mealPlanDoc = await getDoc(mealPlanRef);
       
-      if (!weekDoc.exists() || !weekDoc.data()[dayId]) {
+      if (!mealPlanDoc.exists()) {
         return [];
       }
       
-      // Get meals for this day
-      const dayMeals = weekDoc.data()[dayId];
+      const mealPlan = mealPlanDoc.data();
+      const dayMeals = mealPlan[dayId] || {};
       
-      // Make sure we have an object
-      if (!dayMeals || typeof dayMeals !== 'object') {
-        console.warn(`Invalid meal data for day ${dayId}`);
-        return [];
-      }
-      
-      // Convert to array with meal type
-      return Object.entries(dayMeals)
-        .filter(([_, meal]) => meal && typeof meal === 'object') // Filter out invalid meals
+      // Convert to array for consistent handling
+      const meals = Object.entries(dayMeals)
+        .filter(([mealType, meal]) => meal && typeof meal === 'object')
         .map(([mealType, meal]) => ({
-          ...meal,
+          id: `${dayId}-${mealType}`,
           mealType,
-          timeSlot: this.getMealTimeSlot(mealType)
+          name: meal.name || '',
+          recipe: meal.recipe || '',
+          ingredients: meal.ingredients || []
         }));
+      
+      return meals;
     } catch (error) {
-      console.error('Error getting meals:', error);
-      return [];
+      console.error('Error getting meal plan:', error);
+      throw error;
     }
   },
   
-  // Helper to get the current week range (copied from mealService)
-  getCurrentWeekRange() {
-    const now = new Date();
-    const dayOfWeek = now.getDay(); // 0 is Sunday, 6 is Saturday
-    
-    // Calculate the date of this week's Sunday
-    const sunday = new Date(now);
-    sunday.setDate(now.getDate() - dayOfWeek);
-    sunday.setHours(0, 0, 0, 0);
-    
-    // Calculate the date of this week's Saturday
-    const saturday = new Date(sunday);
-    saturday.setDate(sunday.getDate() + 6);
-    saturday.setHours(23, 59, 59, 999);
-    
-    return { 
-      start: sunday, 
-      end: saturday,
-      startTimestamp: Timestamp.fromDate(sunday),
-      endTimestamp: Timestamp.fromDate(saturday),
-      weekId: `${sunday.getFullYear()}-${sunday.getMonth() + 1}-${sunday.getDate()}`
-    };
-  },
-  
-  // Helper to get approximate time for meal types
+  // Helper to get meal time for agenda sorting
   getMealTimeSlot(mealType) {
-    switch (mealType) {
-      case 'breakfast':
-        return { hour: 7, minute: 0 };
-      case 'lunch':
-        return { hour: 12, minute: 0 };
-      case 'dinner':
-        return { hour: 18, minute: 0 };
-      case 'snack':
-        return { hour: 15, minute: 0 };
-      default:
-        return { hour: 12, minute: 0 };
-    }
-  },
-  
-  // Mock data for development purposes
-  _getMockAgenda() {
-    const now = new Date();
-    const today = format(now, 'yyyy-MM-dd');
+    const mealTimes = {
+      breakfast: '08:00',
+      lunch: '12:00',
+      dinner: '18:00',
+      snack: '15:00'
+    };
     
-    return [
-      {
-        id: 'event-1',
-        title: 'Family Breakfast',
-        startTime: {
-          toDate: () => new Date(today + 'T08:00:00'),
-          seconds: new Date(today + 'T08:00:00').getTime() / 1000
-        },
-        type: 'event',
-        time: '08:00'
-      },
-      {
-        id: 'event-2',
-        title: 'Doctor Appointment',
-        startTime: {
-          toDate: () => new Date(today + 'T10:30:00'),
-          seconds: new Date(today + 'T10:30:00').getTime() / 1000
-        },
-        type: 'event',
-        time: '10:30'
-      },
-      {
-        id: 'meal-1',
-        title: 'Grilled Chicken Salad',
-        mealType: 'lunch',
-        type: 'meal',
-        time: '12:00'
-      },
-      {
-        id: 'chore-1',
-        name: 'Clean Kitchen',
-        assignedTo: 'Alex',
-        dueTime: '14:00',
-        completed: false,
-        type: 'chore'
-      },
-      {
-        id: 'chore-2',
-        name: 'Take out Trash',
-        assignedTo: 'Taylor',
-        dueTime: '16:00',
-        completed: true,
-        type: 'chore'
-      },
-      {
-        id: 'meal-2',
-        title: 'Pasta with Meatballs',
-        mealType: 'dinner',
-        type: 'meal',
-        time: '18:00'
-      },
-      {
-        id: 'event-3',
-        title: 'Family Game Night',
-        startTime: {
-          toDate: () => new Date(today + 'T19:30:00'),
-          seconds: new Date(today + 'T19:30:00').getTime() / 1000
-        },
-        type: 'event',
-        time: '19:30'
-      }
-    ];
+    return mealTimes[mealType.toLowerCase()] || '12:00';
   }
 }; 

@@ -3,228 +3,341 @@ import {
   Card, 
   CardHeader, 
   CardContent, 
-  CircularProgress, 
   Typography, 
   Box, 
-  Grid, 
-  Paper, 
-  Divider 
+  Skeleton,
+  Alert,
+  TextField,
+  IconButton,
+  InputAdornment,
+  Button,
+  useTheme
 } from '@mui/material';
 import WbSunnyIcon from '@mui/icons-material/WbSunny';
 import CloudIcon from '@mui/icons-material/Cloud';
-import OpacityIcon from '@mui/icons-material/Opacity';
+import GrainIcon from '@mui/icons-material/Grain';
 import AcUnitIcon from '@mui/icons-material/AcUnit';
-import FlashOnIcon from '@mui/icons-material/FlashOn';
-import TrendingUpIcon from '@mui/icons-material/TrendingUp';
-import TrendingDownIcon from '@mui/icons-material/TrendingDown';
+import ThunderstormIcon from '@mui/icons-material/Thunderstorm';
+import WaterIcon from '@mui/icons-material/Water';
+import WbTwilightIcon from '@mui/icons-material/WbTwilight';
+import SearchIcon from '@mui/icons-material/Search';
+import LocationOnIcon from '@mui/icons-material/LocationOn';
+import RefreshIcon from '@mui/icons-material/Refresh';
 import { weatherService } from '../../services/weatherService';
 
-// Get weather icon based on condition
-const getWeatherIcon = (condition, size = 'small') => {
-  const conditionLower = condition ? condition.toLowerCase() : '';
-  
-  // Map sizes to MUI sizes
-  const sizes = {
-    small: 'small',
-    medium: 'medium',
-    large: 'large'
-  };
-  
-  const iconSize = sizes[size] || 'small';
-  
-  if (conditionLower.includes('sunny') || conditionLower.includes('clear')) {
-    return <WbSunnyIcon fontSize={iconSize} sx={{ color: '#f59e0b' }} />;
-  } else if (conditionLower.includes('cloud') && !conditionLower.includes('rain')) {
-    return <CloudIcon fontSize={iconSize} sx={{ color: '#6b7280' }} />;
-  } else if (conditionLower.includes('rain') || conditionLower.includes('shower')) {
-    return <OpacityIcon fontSize={iconSize} sx={{ color: '#3b82f6' }} />;
-  } else if (conditionLower.includes('snow')) {
-    return <AcUnitIcon fontSize={iconSize} sx={{ color: '#93c5fd' }} />;
-  } else if (conditionLower.includes('storm') || conditionLower.includes('thunder')) {
-    return <FlashOnIcon fontSize={iconSize} sx={{ color: '#8b5cf6' }} />;
-  } else {
-    return <CloudIcon fontSize={iconSize} sx={{ color: '#9ca3af' }} />;
-  }
-};
-
-// Get background color based on condition
-const getConditionColors = (condition) => {
-  const conditionLower = condition ? condition.toLowerCase() : '';
-  
-  if (conditionLower.includes('sunny') || conditionLower.includes('clear')) {
-    return {
-      light: '#fef3c7',
-      border: '#fcd34d'
-    };
-  } else if (conditionLower.includes('cloud') && !conditionLower.includes('rain')) {
-    return {
-      light: '#f3f4f6',
-      border: '#d1d5db'
-    };
-  } else if (conditionLower.includes('rain') || conditionLower.includes('shower')) {
-    return {
-      light: '#dbeafe',
-      border: '#93c5fd'
-    };
-  } else if (conditionLower.includes('snow')) {
-    return {
-      light: '#e0f2fe',
-      border: '#bae6fd'
-    };
-  } else if (conditionLower.includes('storm') || conditionLower.includes('thunder')) {
-    return {
-      light: '#ede9fe',
-      border: '#c4b5fd'
-    };
-  } else {
-    return {
-      light: '#dbeafe',
-      border: '#93c5fd'
-    };
-  }
-};
-
-function WeatherCard({ fullScreen = false }) {
-  const [isLoading, setIsLoading] = useState(true);
-  const [currentWeather, setCurrentWeather] = useState(null);
-  const [forecast, setForecast] = useState(null);
+function WeatherCard() {
+  const theme = useTheme();
+  const [weather, setWeather] = useState(null);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [location, setLocation] = useState('');
+  const [locationInputError, setLocationInputError] = useState('');
 
   useEffect(() => {
-    const fetchWeather = async () => {
-      try {
-        setIsLoading(true);
-        // Default to Hermitage, PA - in a real app, you might get this from user settings
-        const city = 'Hermitage, PA';
-        
-        // Get current weather
-        const weatherData = await weatherService.getWeatherByCity(city);
-        setCurrentWeather(weatherData);
-        
-        // Get forecast
-        const forecastData = await weatherService.getForecastByCity(city);
-        const dailyForecast = weatherService.getDailyForecast(forecastData);
-        setForecast(dailyForecast);
-        
-        setIsLoading(false);
-      } catch (err) {
-        console.error('Error fetching weather:', err);
-        setError('Unable to load weather data: ' + (err.message || 'Unknown error'));
-        setIsLoading(false);
-      }
-    };
-    
-    fetchWeather();
+    // Retrieve last used location from localStorage
+    const savedLocation = localStorage.getItem('weatherLocation') || 'San Francisco, CA';
+    setLocation(savedLocation);
+    fetchWeather(savedLocation);
   }, []);
 
-  if (isLoading) {
-    return (
-      <Card sx={{ height: '100%', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-        <CircularProgress size={28} />
-      </Card>
-    );
-  }
+  const fetchWeather = async (locationQuery) => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      // Call actual weather API through service
+      const weatherData = await weatherService.getWeatherByCity(locationQuery);
+      const forecastData = await weatherService.getForecastByCity(locationQuery);
+      
+      // Format data for display
+      const currentWeather = {
+        temperature: Math.round(weatherData.main.temp),
+        condition: getWeatherCondition(weatherData.weather[0].id),
+        location: weatherData.name,
+        forecast: weatherService.getDailyForecast(forecastData).slice(0, 5).map(day => ({
+          day: new Date(day.date).toLocaleDateString('en-US', { weekday: 'short' }),
+          temp: Math.round(day.maxTemp),
+          condition: getWeatherCondition(day.mainWeatherId)
+        }))
+      };
+      
+      setWeather(currentWeather);
+      
+      // Save location to localStorage
+      localStorage.setItem('weatherLocation', locationQuery);
+      
+      setLoading(false);
+    } catch (err) {
+      console.error('Error fetching weather:', err);
+      
+      // Create more user-friendly error messages based on common issues
+      let errorMessage = 'Unable to load weather data.';
+      
+      if (err.message && err.message.includes('404')) {
+        errorMessage = `Location "${locationQuery}" not found. Please check the spelling and try again.`;
+      } else if (err.message && err.message.includes('network')) {
+        errorMessage = 'Network error. Please check your internet connection and try again.';
+      } else if (err.message && err.message.includes('api key')) {
+        errorMessage = 'Weather service unavailable at the moment. Please try again later.';
+      }
+      
+      setError(errorMessage);
+      setLoading(false);
+    }
+  };
 
-  if (error || !currentWeather || !forecast || forecast.length === 0) {
-    return (
-      <Card sx={{ height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', p: 2 }}>
-        <CloudIcon sx={{ mb: 1, color: '#9ca3af' }} />
-        <Typography variant="body2" color="text.secondary">
-          {error || "Weather data unavailable"}
+  const getWeatherCondition = (weatherId) => {
+    // Map weather IDs to condition names
+    if (weatherId >= 200 && weatherId < 300) return 'thunderstorm';
+    if (weatherId >= 300 && weatherId < 400) return 'drizzle';
+    if (weatherId >= 500 && weatherId < 600) return 'rainy';
+    if (weatherId >= 600 && weatherId < 700) return 'snowy';
+    if (weatherId >= 700 && weatherId < 800) return 'mist';
+    if (weatherId === 800) return 'sunny';
+    if (weatherId >= 801 && weatherId <= 804) return 'cloudy';
+    return 'sunny'; // Default
+  };
+
+  const getWeatherIcon = (condition) => {
+    // Color mapping that works in both light and dark mode
+    const colors = {
+      sunny: theme.palette.mode === 'dark' ? '#fbbf24' : '#f59e0b',
+      cloudy: theme.palette.mode === 'dark' ? '#cbd5e1' : '#94a3b8',
+      rainy: theme.palette.mode === 'dark' ? '#60a5fa' : '#3b82f6',
+      snowy: theme.palette.mode === 'dark' ? '#93c5fd' : '#60a5fa',
+      thunderstorm: theme.palette.mode === 'dark' ? '#a78bfa' : '#7c3aed',
+      drizzle: theme.palette.mode === 'dark' ? '#93c5fd' : '#60a5fa',
+      mist: theme.palette.mode === 'dark' ? '#cbd5e1' : '#94a3b8'
+    };
+    
+    switch (condition) {
+      case 'sunny':
+        return <WbSunnyIcon sx={{ color: colors.sunny }} />;
+      case 'cloudy':
+        return <CloudIcon sx={{ color: colors.cloudy }} />;
+      case 'rainy':
+        return <GrainIcon sx={{ color: colors.rainy }} />;
+      case 'snowy':
+        return <AcUnitIcon sx={{ color: colors.snowy }} />;
+      case 'thunderstorm':
+        return <ThunderstormIcon sx={{ color: colors.thunderstorm }} />;
+      case 'drizzle':
+        return <WaterIcon sx={{ color: colors.drizzle }} />;
+      case 'mist':
+        return <WbTwilightIcon sx={{ color: colors.mist }} />;
+      default:
+        return <WbSunnyIcon sx={{ color: colors.sunny }} />;
+    }
+  };
+
+  const handleLocationSearch = (e) => {
+    e.preventDefault();
+    
+    // Validate input
+    if (!location || location.trim().length < 2) {
+      setLocationInputError('Please enter a valid location');
+      return;
+    }
+    
+    setLocationInputError('');
+    fetchWeather(location.trim());
+  };
+  
+  const handleRetry = () => {
+    // Use the current location or default to San Francisco
+    fetchWeather(location || 'San Francisco, CA');
+  };
+
+  const renderLoadingSkeleton = () => (
+    <Card sx={{ height: '100%' }} data-testid="weather-card-loading">
+      <CardHeader
+        title={<Skeleton width="40%" />}
+        subheader={<Skeleton width="40%" />}
+      />
+      <CardContent>
+        <Skeleton variant="rectangular" height={40} sx={{ mb: 2 }} />
+        <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
+          <Skeleton variant="circular" width={40} height={40} />
+          <Skeleton width={100} height={60} sx={{ ml: 2 }} />
+        </Box>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+          {[0, 1, 2, 3, 4].map((i) => (
+            <Box key={i} sx={{ textAlign: 'center' }}>
+              <Skeleton variant="text" width={40} />
+              <Skeleton variant="circular" width={30} height={30} sx={{ mx: 'auto', my: 1 }} />
+              <Skeleton variant="text" width={30} />
+            </Box>
+          ))}
+        </Box>
+      </CardContent>
+    </Card>
+  );
+
+  const renderErrorState = () => (
+    <Card sx={{ height: '100%' }} data-testid="weather-card-error">
+      <CardHeader
+        title={
+          <Box sx={{ display: 'flex', alignItems: 'center' }}>
+            <WbSunnyIcon sx={{ fontSize: 18, mr: 0.5, color: theme.palette.mode === 'dark' ? '#fbbf24' : '#d97706' }} />
+            <Typography variant="subtitle1" fontWeight="medium">
+              Weather
+            </Typography>
+          </Box>
+        }
+      />
+      <CardContent>
+        <Alert 
+          severity="error" 
+          sx={{ mb: 2 }}
+          action={
+            <Button 
+              color="inherit" 
+              size="small" 
+              startIcon={<RefreshIcon />}
+              onClick={handleRetry}
+              data-testid="weather-retry-button"
+            >
+              Retry
+            </Button>
+          }
+        >
+          {error}
+        </Alert>
+        
+        <form onSubmit={handleLocationSearch} data-testid="weather-search-form">
+          <TextField
+            fullWidth
+            label="Location"
+            value={location}
+            onChange={(e) => setLocation(e.target.value)}
+            error={!!locationInputError}
+            helperText={locationInputError}
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <LocationOnIcon color="action" />
+                </InputAdornment>
+              ),
+              endAdornment: (
+                <InputAdornment position="end">
+                  <IconButton type="submit" edge="end" data-testid="weather-search-button">
+                    <SearchIcon />
+                  </IconButton>
+                </InputAdornment>
+              ),
+            }}
+            placeholder="Enter city, state, or country"
+            size="small"
+            sx={{ mb: 1 }}
+            data-testid="weather-location-input"
+          />
+        </form>
+        
+        <Typography variant="body2" color="text.secondary" sx={{ mt: 2, textAlign: 'center' }}>
+          Try searching for a major city or check your internet connection.
         </Typography>
-      </Card>
-    );
+      </CardContent>
+    </Card>
+  );
+
+  if (loading) {
+    return renderLoadingSkeleton();
   }
 
-  const currentCondition = currentWeather?.weather?.[0]?.description || 'Unknown';
-  const colors = getConditionColors(currentCondition);
+  if (error) {
+    return renderErrorState();
+  }
+
+  // Define background based on theme mode
+  const cardBackground = theme.palette.mode === 'dark' 
+    ? 'linear-gradient(to bottom right, #422006, #713f12)' 
+    : 'linear-gradient(to bottom right, #fef3c7, #fde68a)';
+
+  const cardBorder = theme.palette.mode === 'dark' 
+    ? '1px solid #92400e' 
+    : '1px solid #fbbf24';
+
+  const headerBackground = theme.palette.mode === 'dark'
+    ? 'rgba(0, 0, 0, 0.2)'
+    : 'rgba(255, 255, 255, 0.7)';
 
   return (
     <Card 
       sx={{ 
-        height: '100%', 
-        background: `linear-gradient(to bottom right, ${colors.light}, white)`,
-        border: `1px solid ${colors.border}`,
-        overflow: 'hidden'
+        height: '100%',
+        background: cardBackground,
+        border: cardBorder
       }}
+      data-testid="weather-card"
     >
       <CardHeader
-        title="Weather"
-        titleTypographyProps={{ variant: 'subtitle1', fontWeight: 'medium' }}
-        subheader={currentWeather?.name || "Location Unknown"}
-        subheaderTypographyProps={{ variant: 'caption' }}
+        title={
+          <Box sx={{ display: 'flex', alignItems: 'center' }}>
+            <WbSunnyIcon sx={{ fontSize: 18, mr: 0.5, color: theme.palette.mode === 'dark' ? '#fbbf24' : '#d97706' }} />
+            <Typography variant="subtitle1" fontWeight="medium">
+              Weather
+            </Typography>
+          </Box>
+        }
+        subheader={weather.location}
         sx={{ 
-          borderBottom: '1px solid rgba(0, 0, 0, 0.08)',
-          backgroundColor: 'rgba(255, 255, 255, 0.7)',
+          borderBottom: `1px solid ${theme.palette.divider}`,
+          backgroundColor: headerBackground,
           py: 1.5,
           px: 2
         }}
       />
-
-      <CardContent sx={{ p: 2 }}>
-        {/* Current Weather */}
-        <Box sx={{ mb: 2 }}>
-          <Typography variant="caption" color="text.secondary">
-            {currentCondition}
-          </Typography>
-          <Typography variant="h2" component="div" fontWeight="medium" sx={{ my: 0.5 }}>
-            {Math.round(currentWeather?.main?.temp || 0)}°F
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            Feels like {Math.round(currentWeather?.main?.feels_like || 0)}°F
+      <CardContent>
+        <form onSubmit={handleLocationSearch} style={{ marginBottom: 16 }} data-testid="weather-search-form">
+          <TextField
+            fullWidth
+            label="Change Location"
+            value={location}
+            onChange={(e) => setLocation(e.target.value)}
+            error={!!locationInputError}
+            helperText={locationInputError}
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <LocationOnIcon color="action" />
+                </InputAdornment>
+              ),
+              endAdornment: (
+                <InputAdornment position="end">
+                  <IconButton type="submit" edge="end" data-testid="weather-search-button">
+                    <SearchIcon />
+                  </IconButton>
+                </InputAdornment>
+              ),
+            }}
+            placeholder="Enter city, state, or country"
+            size="small"
+            data-testid="weather-location-input"
+          />
+        </form>
+        
+        <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }} data-testid="weather-current">
+          {getWeatherIcon(weather.condition)}
+          <Typography variant="h4" sx={{ ml: 2, fontWeight: 'medium' }}>
+            {weather.temperature}°F
           </Typography>
         </Box>
-
-        <Divider sx={{ my: 1 }} />
-
-        {/* 3-Day Forecast */}
-        <Typography variant="subtitle2" color="text.secondary" gutterBottom>
-          3-Day Forecast
-        </Typography>
-        <Grid container spacing={1}>
-          {forecast.slice(0, 3).map((day, index) => {
-            if (!day) return null;
-            
-            const dayName = index === 0 ? 'Today' : 
-                         index === 1 ? 'Tomorrow' : 
-                         'Sat';
-            
-            return (
-              <Grid item xs={4} key={index}>
-                <Paper 
-                  elevation={0} 
-                  sx={{ 
-                    p: 1, 
-                    textAlign: 'center',
-                    border: `1px solid rgba(0, 0, 0, 0.08)`,
-                    borderRadius: 1
-                  }}
-                >
-                  <Typography variant="caption" fontWeight="medium">
-                    {dayName}
-                  </Typography>
-                  <Box sx={{ display: 'flex', justifyContent: 'center', my: 0.5 }}>
-                    {getWeatherIcon(day.weatherDescription || '')}
-                  </Box>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 0.5 }}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', color: '#ef4444' }}>
-                      <TrendingUpIcon sx={{ fontSize: '0.875rem', mr: 0.25 }} />
-                      <Typography variant="caption">
-                        {Math.round(day.maxTemp || 0)}°
-                      </Typography>
-                    </Box>
-                    <Box sx={{ display: 'flex', alignItems: 'center', color: '#3b82f6' }}>
-                      <TrendingDownIcon sx={{ fontSize: '0.875rem', mr: 0.25 }} />
-                      <Typography variant="caption">
-                        {Math.round(day.minTemp || 0)}°
-                      </Typography>
-                    </Box>
-                  </Box>
-                </Paper>
-              </Grid>
-            );
-          })}
-        </Grid>
+        
+        <Box sx={{ display: 'flex', justifyContent: 'space-between' }} data-testid="weather-forecast">
+          {weather.forecast.map((day, index) => (
+            <Box key={index} sx={{ textAlign: 'center' }} data-testid={`weather-forecast-day-${index}`}>
+              <Typography variant="caption" color="text.secondary">
+                {day.day}
+              </Typography>
+              <Box sx={{ my: 1 }}>
+                {getWeatherIcon(day.condition)}
+              </Box>
+              <Typography variant="body2">
+                {day.temp}°
+              </Typography>
+            </Box>
+          ))}
+        </Box>
       </CardContent>
     </Card>
   );

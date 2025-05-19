@@ -1,36 +1,26 @@
 import React, { useState, useEffect } from 'react';
-import { CircularProgress, Grid, Container, Paper, Typography, Box, IconButton } from '@mui/material';
+import { CircularProgress, Grid, Container, Paper, Typography, Box, IconButton, useTheme, useMediaQuery } from '@mui/material';
 import PlayCircleOutlineIcon from '@mui/icons-material/PlayCircleOutline';
 import StopCircleIcon from '@mui/icons-material/StopCircle';
 import WeatherCard from '../components/dashboard/WeatherCard';
 import TodayAgendaCard from '../components/dashboard/TodayAgendaCard';
-import MealPlannerCard from '../components/dashboard/MealPlannerCard';
+import TodaysMealsCard from '../components/dashboard/TodaysMealsCard';
 import FamilyStatsCard from '../components/dashboard/FamilyStatsCard';
-import { sampleDataService } from '../services/sampleDataService';
+import ChoresCard from '../components/dashboard/ChoresCard';
+import SchoolLunchCard from '../components/dashboard/SchoolLunchCard';
+import DateCard from '../components/dashboard/DateCard';
+import GroceryListCard from '../components/dashboard/GroceryListCard';
 
 const ROTATION_INTERVAL = 20000; // 20 seconds
 
 function DashboardPage() {
   const [isKioskMode, setIsKioskMode] = useState(false);
   const [activeCardIndex, setActiveCardIndex] = useState(0);
-  const [isInitialized, setIsInitialized] = useState(false);
-  const [initError, setInitError] = useState(null);
 
-  // Initialize sample data for the dashboard
-  useEffect(() => {
-    const initializeData = async () => {
-      try {
-        await sampleDataService.initializeSampleData();
-        setIsInitialized(true);
-      } catch (error) {
-        console.error('Error initializing sample data:', error);
-        setInitError(error.message);
-        setIsInitialized(true); // Continue anyway to show empty UI
-      }
-    };
-    
-    initializeData();
-  }, []);
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  const isTablet = useMediaQuery(theme.breakpoints.down('md'));
+  const isDesktop = useMediaQuery(theme.breakpoints.up('lg'));
 
   // Toggle kiosk mode (auto-rotation)
   const toggleKioskMode = () => {
@@ -44,31 +34,22 @@ function DashboardPage() {
     if (!isKioskMode) return;
     
     const rotationTimer = setInterval(() => {
-      setActiveCardIndex((prevIndex) => (prevIndex + 1) % 4);
+      setActiveCardIndex((prevIndex) => (prevIndex + 1) % 6);
     }, ROTATION_INTERVAL);
 
     return () => clearInterval(rotationTimer);
   }, [isKioskMode]);
 
-  // If initialization is still in progress, show a simple loading indicator
-  if (!isInitialized) {
-    return (
-      <Box 
-        sx={{ 
-          display: 'flex', 
-          justifyContent: 'center', 
-          alignItems: 'center', 
-          minHeight: '100vh',
-          bgcolor: '#f5f5f5'
-        }}
-      >
-        <CircularProgress />
-      </Box>
-    );
-  }
+  // Determine grid columns based on screen size
+  const getGridColumns = () => {
+    if (isMobile) return 1;
+    if (isTablet) return 2;
+    if (isDesktop) return 3;
+    return 4;
+  };
 
   return (
-    <Box sx={{ bgcolor: '#f5f5f5', minHeight: '100vh', py: 2 }}>
+    <Box sx={{ bgcolor: theme.palette.background.default, minHeight: '100vh', py: 2 }}>
       <Container maxWidth="xl">
         {/* Dashboard Header */}
         <Box 
@@ -93,18 +74,30 @@ function DashboardPage() {
 
         {/* Standard Dashboard View */}
         {!isKioskMode && (
-          <Grid container spacing={2}>
+          <Grid container spacing={3}>
+            {/* Row 1: Date & Weather */}
             <Grid item xs={12} md={4}>
+              <DateCard />
+            </Grid>
+            <Grid item xs={12} md={8}>
               <WeatherCard />
             </Grid>
-            <Grid item xs={12} md={4}>
+            
+            {/* Row 2: Main Content */}
+            <Grid item xs={12} md={6} lg={4}>
               <TodayAgendaCard />
             </Grid>
-            <Grid item xs={12} md={4}>
-              <MealPlannerCard />
+            <Grid item xs={12} md={6} lg={4}>
+              <TodaysMealsCard />
             </Grid>
-            <Grid item xs={12}>
-              <FamilyStatsCard />
+            <Grid item xs={12} md={6} lg={4}>
+              <SchoolLunchCard />
+            </Grid>
+            <Grid item xs={12} md={6} lg={4}>
+              <ChoresCard />
+            </Grid>
+            <Grid item xs={12} md={6} lg={4}>
+              <GroceryListCard />
             </Grid>
           </Grid>
         )}
@@ -119,10 +112,16 @@ function DashboardPage() {
               <TodayAgendaCard fullScreen />
             </Box>
             <Box sx={{ display: activeCardIndex === 2 ? 'block' : 'none', height: '100%' }}>
-              <MealPlannerCard fullScreen />
+              <TodaysMealsCard fullScreen />
             </Box>
             <Box sx={{ display: activeCardIndex === 3 ? 'block' : 'none', height: '100%' }}>
-              <FamilyStatsCard fullScreen />
+              <SchoolLunchCard fullScreen />
+            </Box>
+            <Box sx={{ display: activeCardIndex === 4 ? 'block' : 'none', height: '100%' }}>
+              <ChoresCard fullScreen />
+            </Box>
+            <Box sx={{ display: activeCardIndex === 5 ? 'block' : 'none', height: '100%' }}>
+              <GroceryListCard fullScreen />
             </Box>
           </Box>
         )}

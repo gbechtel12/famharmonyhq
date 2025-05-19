@@ -14,12 +14,16 @@ import { db } from '../firebase';
 
 export const eventService = {
   // Create a new event
-  async createEvent(eventData) {
+  async createEvent(familyId, eventData) {
+    if (!familyId) {
+      throw new Error('Family ID is required');
+    }
+    
     try {
       // Handle recurring events
       if (Array.isArray(eventData)) {
         const batch = writeBatch(db);
-        const eventsRef = collection(db, 'events');
+        const eventsRef = collection(db, 'families', familyId, 'events');
         
         eventData.forEach(event => {
           const newEventRef = doc(eventsRef);
@@ -38,7 +42,7 @@ export const eventService = {
       }
 
       // Handle single event
-      const eventsRef = collection(db, 'events');
+      const eventsRef = collection(db, 'families', familyId, 'events');
       const newEvent = {
         ...eventData,
         start: Timestamp.fromDate(new Date(eventData.start)),
@@ -56,10 +60,13 @@ export const eventService = {
 
   // Fetch events for a family
   async getEventsByFamilyId(familyId) {
+    if (!familyId) {
+      throw new Error('Family ID is required');
+    }
+    
     try {
-      const eventsRef = collection(db, 'events');
-      const q = query(eventsRef, where('familyId', '==', familyId));
-      const querySnapshot = await getDocs(q);
+      const eventsRef = collection(db, 'families', familyId, 'events');
+      const querySnapshot = await getDocs(eventsRef);
       
       return querySnapshot.docs.map(doc => ({
         id: doc.id,
@@ -74,9 +81,13 @@ export const eventService = {
   },
 
   // Update an event
-  async updateEvent(eventId, updateData) {
+  async updateEvent(familyId, eventId, updateData) {
+    if (!familyId || !eventId) {
+      throw new Error('Family ID and Event ID are required');
+    }
+    
     try {
-      const eventRef = doc(db, 'events', eventId);
+      const eventRef = doc(db, 'families', familyId, 'events', eventId);
       const updates = {
         ...updateData,
         updatedAt: Timestamp.now()
@@ -96,9 +107,13 @@ export const eventService = {
   },
 
   // Delete an event
-  async deleteEvent(eventId) {
+  async deleteEvent(familyId, eventId) {
+    if (!familyId || !eventId) {
+      throw new Error('Family ID and Event ID are required');
+    }
+    
     try {
-      const eventRef = doc(db, 'events', eventId);
+      const eventRef = doc(db, 'families', familyId, 'events', eventId);
       await deleteDoc(eventRef);
       return eventId;
     } catch (error) {
@@ -107,10 +122,14 @@ export const eventService = {
     }
   },
 
-  async deleteRecurringEvent(eventId) {
+  async deleteRecurringEvent(familyId, eventId) {
+    if (!familyId || !eventId) {
+      throw new Error('Family ID and Event ID are required');
+    }
+    
     try {
       const batch = writeBatch(db);
-      const eventsRef = collection(db, 'events');
+      const eventsRef = collection(db, 'families', familyId, 'events');
       const q = query(eventsRef, where('recurringEventId', '==', eventId));
       const querySnapshot = await getDocs(q);
       

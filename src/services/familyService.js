@@ -7,7 +7,9 @@ import {
   arrayUnion, 
   arrayRemove, 
   addDoc, 
-  getDocs 
+  getDocs,
+  query,
+  where
 } from 'firebase/firestore';
 import { db } from '../firebase';
 import { userService } from './userService';
@@ -67,10 +69,52 @@ export const familyService = {
     }
   },
 
-  async getFamilyMembers(familyId) {
+  async createInvite(familyId, email) {
     try {
-      // Try to get members from the subcollection directly instead of relying on userService
-      // which would require authentication
+      // Check if the family exists
+      const familyRef = doc(db, 'families', familyId);
+      const familyDoc = await getDoc(familyRef);
+      
+      if (!familyDoc.exists()) {
+        throw new Error('Family not found');
+      }
+      
+      // Generate a random invite code
+      const inviteCode = Math.random().toString(36).substring(2, 10).toUpperCase();
+      
+      // Create the invite document
+      const inviteRef = doc(collection(db, 'familyInvites'));
+      await setDoc(inviteRef, {
+        familyId,
+        email,
+        code: inviteCode,
+        status: 'pending',
+        createdAt: new Date().toISOString(),
+        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString() // 7 days expiry
+      });
+      
+      return {
+        id: inviteRef.id,
+        code: inviteCode,
+        familyId,
+        email
+      };
+    } catch (error) {
+      console.error('Error creating family invite:', error);
+      throw error;
+    }
+  },
+
+  async getFamilyMembers(familyId) {
+    if (!familyId) {
+      console.error('Family ID is required for getFamilyMembers');
+      throw new Error('Family ID is required');
+    }
+
+    try {
+      console.log('Getting family members for family:', familyId);
+      
+      // Try to get members from the subcollection directly
       const membersRef = collection(db, 'families', familyId, 'members');
       const memberDocs = await getDocs(membersRef);
       
@@ -82,45 +126,29 @@ export const familyService = {
         }));
       }
       
-      // Fallback to the old method
+      // Fallback to the method that uses the members array in the family document
       const familyDoc = await this.getFamilyById(familyId);
       if (!familyDoc) {
-        // If no family is found, return mock data for development
-        console.log('No family found, returning mock data');
-        return this._getMockFamilyMembers();
+        console.warn('Family document not found');
+        return [];
+      }
+
+      if (!familyDoc.members || !Array.isArray(familyDoc.members)) {
+        console.warn('Family document has no members array');
+        return [];
       }
 
       const memberPromises = familyDoc.members.map(memberId => 
         userService.getUserProfile(memberId)
       );
       const members = await Promise.all(memberPromises);
-      const validMembers = members.filter(member => member !== null);
       
-      // If no valid members are found, return mock data
-      if (validMembers.length === 0) {
-        return this._getMockFamilyMembers();
-      }
+      const validMembers = members.filter(member => member !== null);
+      console.log(`Found ${validMembers.length} valid members out of ${members.length} total`);
       
       return validMembers;
     } catch (error) {
       console.error('Error getting family members:', error);
-      // Return mock data instead of throwing an error
-      return this._getMockFamilyMembers();
-    }
-  },
-
-  async inviteMember(familyId, email) {
-    try {
-      const inviteRef = doc(collection(db, 'familyInvites'));
-      await setDoc(inviteRef, {
-        familyId,
-        email,
-        status: 'pending',
-        createdAt: new Date().toISOString()
-      });
-      return inviteRef.id;
-    } catch (error) {
-      console.error('Error creating invite:', error);
       throw error;
     }
   },
@@ -169,8 +197,13 @@ export const familyService = {
   async getSubUsers(familyId) {
     try {
       const subUsersRef = collection(db, 'families', familyId, 'subUsers');
-      const snapshot = await getDocs(subUsersRef);
-      return snapshot.docs.map(doc => ({
+      const subUserDocs = await getDocs(subUsersRef);
+      
+      if (subUserDocs.empty) {
+        return [];
+      }
+      
+      return subUserDocs.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
       }));
@@ -181,13 +214,20 @@ export const familyService = {
   },
 
   async getAllFamilyMembers(familyId) {
+    if (!familyId) {
+      console.error('Family ID is required for getAllFamilyMembers');
+      throw new Error('Family ID is required');
+    }
+
     try {
+      console.log('Getting all family members for family:', familyId);
+      
       const [familyMembers, subUsers] = await Promise.all([
         this.getFamilyMembers(familyId),
         this.getSubUsers(familyId)
       ]);
 
-      const adultMembers = familyMembers.map(member => ({
+      const adultMembers = (familyMembers || []).map(member => ({
         id: member.id,
         name: member.displayName || member.email,
         email: member.email,
@@ -195,71 +235,23 @@ export const familyService = {
         color: member.color || null
       }));
 
-      const childMembers = subUsers.map(child => ({
+      const childMembers = (subUsers || []).map(child => ({
         id: child.id,
         name: child.name,
         type: 'child',
         color: child.color || null
       }));
 
-      return [...adultMembers, ...childMembers].sort((a, b) => 
+      const allMembers = [...adultMembers, ...childMembers].sort((a, b) => 
         a.name.localeCompare(b.name)
       );
+      
+      console.log(`Successfully retrieved ${allMembers.length} family members (${adultMembers.length} adults, ${childMembers.length} children)`);
+      
+      return allMembers;
     } catch (error) {
       console.error('Error getting all family members:', error);
       throw error;
     }
-  },
-
-  // Mock data for development purposes
-  _getMockFamilyMembers() {
-    return [
-      {
-        id: 'parent1',
-        name: 'Jennifer Smith',
-        displayName: 'Jennifer Smith',
-        email: 'jennifer@example.com',
-        type: 'parent',
-        gender: 'female',
-        completedChores: 8,
-        totalChores: 10,
-        points: 320,
-        streak: 5
-      },
-      {
-        id: 'parent2',
-        name: 'Michael Smith',
-        displayName: 'Michael Smith',
-        email: 'michael@example.com',
-        type: 'parent',
-        gender: 'male',
-        completedChores: 6,
-        totalChores: 8,
-        points: 280,
-        streak: 3
-      },
-      {
-        id: 'child1',
-        name: 'Alex Smith',
-        displayName: 'Alex Smith',
-        type: 'child',
-        gender: 'male',
-        completedChores: 5,
-        totalChores: 7,
-        points: 150,
-        streak: 2
-      },
-      {
-        id: 'child2',
-        name: 'Taylor Smith',
-        displayName: 'Taylor Smith',
-        type: 'child',
-        gender: 'female',
-        completedChores: 4,
-        totalChores: 6,
-        points: 120,
-        streak: 1
-      }
-    ];
   }
 }; 

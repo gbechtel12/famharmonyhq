@@ -19,7 +19,7 @@ export default function CalendarPage() {
       </Typography>
       <Grid container spacing={2}>
         <Grid item xs={12} md={9}>
-          <CalendarView familyId={user?.uid} />
+          <CalendarView familyId={user?.familyId} />
         </Grid>
         <Grid item xs={12} md={3}>
           <Box sx={{ mb: 2 }}>

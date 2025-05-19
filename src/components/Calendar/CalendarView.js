@@ -40,6 +40,49 @@ const ColorPreview = styled('div')(({ color }) => ({
   verticalAlign: 'middle'
 }));
 
+// Custom styles for dark mode support
+const CalendarWrapper = styled(Box)(({ theme }) => ({
+  '& .rbc-calendar': {
+    backgroundColor: theme.palette.mode === 'dark' ? theme.palette.background.paper : 'inherit',
+    color: theme.palette.text.primary,
+  },
+  '& .rbc-header': {
+    backgroundColor: theme.palette.mode === 'dark' ? theme.palette.background.default : 'inherit',
+    color: theme.palette.text.primary,
+    borderColor: theme.palette.divider
+  },
+  '& .rbc-month-view, & .rbc-time-view, & .rbc-agenda-view': {
+    backgroundColor: theme.palette.mode === 'dark' ? theme.palette.background.paper : 'inherit',
+    border: `1px solid ${theme.palette.divider}`
+  },
+  '& .rbc-month-row, & .rbc-day-bg, & .rbc-time-content, & .rbc-time-header': {
+    borderColor: theme.palette.divider
+  },
+  '& .rbc-day-bg + .rbc-day-bg': {
+    borderColor: theme.palette.divider
+  },
+  '& .rbc-toolbar button': {
+    color: theme.palette.text.primary,
+    borderColor: theme.palette.divider,
+    '&:hover': {
+      backgroundColor: theme.palette.mode === 'dark' ? theme.palette.action.hover : 'rgba(0,0,0,0.08)',
+    },
+    '&:active, &.rbc-active': {
+      backgroundColor: theme.palette.mode === 'dark' ? theme.palette.action.selected : 'rgba(0,0,0,0.12)',
+      borderColor: theme.palette.divider
+    }
+  },
+  '& .rbc-off-range-bg': {
+    backgroundColor: theme.palette.mode === 'dark' ? theme.palette.action.disabledBackground : '#f5f5f5'
+  },
+  '& .rbc-today': {
+    backgroundColor: theme.palette.mode === 'dark' ? 'rgba(25, 118, 210, 0.16)' : 'rgba(66, 165, 245, 0.1)'
+  },
+  '& .rbc-current-time-indicator': {
+    backgroundColor: theme.palette.mode === 'dark' ? '#f44336' : '#ec407a'
+  }
+}));
+
 // Same categories as EventModal
 const EVENT_CATEGORIES = [
   { id: 'personal', label: 'Personal', color: '#4CAF50' },
@@ -81,12 +124,19 @@ export default function CalendarView({ familyId }) {
     let unsubscribe;
 
     const setupRealtimeEvents = async () => {
+      if (!familyId) {
+        console.error('Family ID is missing');
+        setError('Family ID is required to load events');
+        setLoading(false);
+        return;
+      }
+
       setLoading(true);
       setError(null);
 
       try {
-        // SIMPLIFIED QUERY - just get all events without filtering by familyId
-        const eventsRef = collection(db, 'events');
+        // Use the correct collection path matching the one in eventService.js
+        const eventsRef = collection(db, 'families', familyId, 'events');
         
         // First try a simple getDocs to test permissions
         const snapshot = await getDocs(eventsRef);
@@ -161,13 +211,13 @@ export default function CalendarView({ familyId }) {
   const handleEventSubmit = async (formData) => {
     try {
       if (Array.isArray(formData)) {
-        await eventService.createEvent(formData);
+        await eventService.createEvent(familyId, formData);
         showNotification('Recurring events created successfully');
       } else if (formData.id) {
-        await eventService.updateEvent(formData.id, formData);
+        await eventService.updateEvent(familyId, formData.id, formData);
         showNotification('Event updated successfully');
       } else {
-        await eventService.createEvent(formData);
+        await eventService.createEvent(familyId, formData);
         showNotification('Event created successfully');
       }
     } catch (error) {
@@ -179,10 +229,10 @@ export default function CalendarView({ familyId }) {
   const handleEventDelete = async (eventId, isRecurring = false) => {
     try {
       if (isRecurring) {
-        await eventService.deleteRecurringEvent(eventId);
+        await eventService.deleteRecurringEvent(familyId, eventId);
         showNotification('Recurring events deleted successfully');
       } else {
-        await eventService.deleteEvent(eventId);
+        await eventService.deleteEvent(familyId, eventId);
         showNotification('Event deleted successfully');
       }
     } catch (error) {
