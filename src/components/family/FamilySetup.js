@@ -9,10 +9,13 @@ import {
   Tabs,
   Tab,
   Alert,
-  Divider
+  Divider,
+  CircularProgress
 } from '@mui/material';
 import { styled } from '@mui/material/styles';
 import { useFamily } from '../../contexts/FamilyContext';
+import { useAuth } from '../../contexts/AuthContext';
+import { useNavigate } from 'react-router-dom';
 import Loader from '../common/Loader';
 
 const StyledPaper = styled(Paper)(({ theme }) => ({
@@ -28,10 +31,13 @@ const StyledPaper = styled(Paper)(({ theme }) => ({
 }));
 
 export default function FamilySetup() {
+  const { user } = useAuth();
   const { createFamily, joinFamily, loading, error } = useFamily();
+  const navigate = useNavigate();
   const [tabValue, setTabValue] = useState(0);
   const [familyName, setFamilyName] = useState('');
   const [inviteCode, setInviteCode] = useState('');
+  const [userName, setUserName] = useState(user?.displayName || '');
   const [localError, setLocalError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -53,6 +59,7 @@ export default function FamilySetup() {
       }
       
       await createFamily(familyName);
+      navigate('/dashboard');
     } catch (err) {
       console.error('Error creating family:', err);
       setLocalError(err.message || 'Failed to create family. Please try again.');
@@ -73,10 +80,21 @@ export default function FamilySetup() {
         throw new Error('Please enter an invite code');
       }
       
-      await joinFamily(inviteCode);
+      await joinFamily(inviteCode.trim(), userName.trim() || null);
+      navigate('/dashboard');
     } catch (err) {
       console.error('Error joining family:', err);
-      setLocalError(err.message || 'Invalid invite code or the invitation has expired.');
+      
+      // Handle specific error cases
+      if (err.message?.includes('not found') || err.message?.includes('Invalid code')) {
+        setLocalError('Invalid invite code. Please check and try again.');
+      } else if (err.message?.includes('expired')) {
+        setLocalError('This invite code has expired. Please request a new one.');
+      } else if (err.message?.includes('no longer valid')) {
+        setLocalError('This invite code has already been used or is no longer valid.');
+      } else {
+        setLocalError(err.message || 'Failed to join family. Please try again.');
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -164,6 +182,20 @@ export default function FamilySetup() {
               value={inviteCode}
               onChange={(e) => setInviteCode(e.target.value)}
               disabled={isSubmitting}
+              placeholder="Enter invite code"
+            />
+            
+            <TextField
+              margin="normal"
+              fullWidth
+              id="userName"
+              label="Your Name"
+              name="userName"
+              value={userName}
+              onChange={(e) => setUserName(e.target.value)}
+              disabled={isSubmitting}
+              placeholder="How would you like to be called?"
+              helperText="This will be visible to your family members"
             />
             
             <Button
@@ -174,11 +206,29 @@ export default function FamilySetup() {
               disabled={isSubmitting}
               sx={{ mt: 3 }}
             >
-              {isSubmitting ? 'Joining...' : 'Join Family'}
+              {isSubmitting ? (
+                <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                  <CircularProgress size={24} color="inherit" sx={{ mr: 1 }} />
+                  Joining...
+                </Box>
+              ) : 'Join Family'}
             </Button>
           </Box>
         )}
       </StyledPaper>
+      
+      <Box sx={{ textAlign: 'center', mt: 3 }}>
+        <Typography variant="body2" color="textSecondary" sx={{ mb: 1 }}>
+          Don't have an account yet?
+        </Typography>
+        <Button 
+          variant="outlined" 
+          onClick={() => navigate('/login')}
+          sx={{ textTransform: 'none' }}
+        >
+          Create an account first
+        </Button>
+      </Box>
     </Container>
   );
 } 

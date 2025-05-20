@@ -109,10 +109,16 @@ export function FamilyProvider({ children }) {
     }
   };
 
-  const joinFamily = async (inviteId) => {
+  const joinFamily = async (inviteCode, userName = null) => {
     try {
       setLoading(true);
-      const familyId = await familyService.acceptInvite(inviteId, user.uid);
+      setError(null);
+      
+      if (!inviteCode || typeof inviteCode !== 'string') {
+        throw new Error('Please enter a valid invite code');
+      }
+      
+      const familyId = await familyService.acceptInvite(inviteCode, user.uid, userName);
       
       // Reload family data
       const familyData = await familyService.getFamilyById(familyId);
@@ -120,6 +126,7 @@ export function FamilyProvider({ children }) {
       
       return familyId;
     } catch (err) {
+      console.error('Error joining family:', err);
       setError(err.message);
       throw err;
     } finally {

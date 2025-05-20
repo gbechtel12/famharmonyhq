@@ -42,6 +42,16 @@ service cloud.firestore {
       allow update: if isAuthenticated();
     }
 
+    // New direct path invites
+    match /invites/{code} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() &&
+                    (request.resource.data.familyId == null || isFamilyMember(request.resource.data.familyId) || 
+                     hasFamilyId(request.resource.data.familyId));
+      allow update: if isAuthenticated();
+      allow delete: if isAuthenticated() && hasFamilyId(resource.data.familyId);
+    }
+
     // Families
     match /families/{familyId} {
       allow read: if isAuthenticated() && 
