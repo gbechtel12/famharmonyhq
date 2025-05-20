@@ -8,10 +8,15 @@ service cloud.firestore {
 
     function isFamilyMember(familyId) {
       return isAuthenticated() && 
-             exists(/databases/$(database)/documents/families/$(familyId)) &&
-             (get(/databases/$(database)/documents/families/$(familyId)).data.members.hasAny([request.auth.uid]) ||
-              exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-              get(/databases/$(database)/documents/users/$(request.auth.uid)).data.familyId == familyId);
+             (
+               // Either the user is in the members array
+               exists(/databases/$(database)/documents/families/$(familyId)) &&
+               get(/databases/$(database)/documents/families/$(familyId)).data.members.hasAny([request.auth.uid])
+               ||
+               // Or the user has this familyId in their profile
+               exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+               get(/databases/$(database)/documents/users/$(request.auth.uid)).data.familyId == familyId
+             );
     }
 
     function hasFamilyId(familyId) {
@@ -26,6 +31,8 @@ service cloud.firestore {
                  (request.auth.uid == userId || 
                   (exists(/databases/$(database)/documents/users/$(userId)) &&
                    exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+                   get(/databases/$(database)/documents/users/$(userId)).data.familyId != null &&
+                   get(/databases/$(database)/documents/users/$(request.auth.uid)).data.familyId != null &&
                    get(/databases/$(database)/documents/users/$(userId)).data.familyId == 
                    get(/databases/$(database)/documents/users/$(request.auth.uid)).data.familyId));
       
@@ -55,25 +62,55 @@ service cloud.firestore {
     // Families
     match /families/{familyId} {
       allow read: if isAuthenticated() && 
-                 (resource.data.members.hasAny([request.auth.uid]) || hasFamilyId(familyId));
+                 (
+                   resource.data.members.hasAny([request.auth.uid]) || 
+                   hasFamilyId(familyId) ||
+                   exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+                   get(/databases/$(database)/documents/users/$(request.auth.uid)).data.familyId == familyId
+                 );
       allow create: if isAuthenticated();
       allow update: if isAuthenticated() && 
-                   (resource.data.members.hasAny([request.auth.uid]) || hasFamilyId(familyId));
+                   (
+                     resource.data.members.hasAny([request.auth.uid]) || 
+                     hasFamilyId(familyId) ||
+                     exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+                     get(/databases/$(database)/documents/users/$(request.auth.uid)).data.familyId == familyId
+                   );
 
       // Family members (including children)
       match /members/{memberId} {
         allow read: if isAuthenticated() && 
-                   (resource == null || isFamilyMember(familyId) || hasFamilyId(familyId));
+                   (
+                     resource == null || 
+                     isFamilyMember(familyId) || 
+                     exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+                     get(/databases/$(database)/documents/users/$(request.auth.uid)).data.familyId == familyId
+                   );
         allow write: if isAuthenticated() && 
-                    (resource == null || isFamilyMember(familyId) || hasFamilyId(familyId));
+                    (
+                      resource == null || 
+                      isFamilyMember(familyId) || 
+                      exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+                      get(/databases/$(database)/documents/users/$(request.auth.uid)).data.familyId == familyId
+                    );
       }
       
       // SubUsers (legacy child profiles)
       match /subUsers/{subUserId} {
         allow read: if isAuthenticated() && 
-                   (resource == null || isFamilyMember(familyId) || hasFamilyId(familyId));
+                   (
+                     resource == null || 
+                     isFamilyMember(familyId) || 
+                     exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+                     get(/databases/$(database)/documents/users/$(request.auth.uid)).data.familyId == familyId
+                   );
         allow write: if isAuthenticated() && 
-                    (resource == null || isFamilyMember(familyId) || hasFamilyId(familyId));
+                    (
+                      resource == null || 
+                      isFamilyMember(familyId) || 
+                      exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+                      get(/databases/$(database)/documents/users/$(request.auth.uid)).data.familyId == familyId
+                    );
       }
 
       // Family rewards
