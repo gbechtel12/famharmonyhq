@@ -114,20 +114,33 @@ export function FamilyProvider({ children }) {
       setLoading(true);
       setError(null);
       
+      console.log(`Attempting to join family with invite code: ${inviteCode}`);
+      
       if (!inviteCode || typeof inviteCode !== 'string') {
         throw new Error('Please enter a valid invite code');
       }
       
+      // First try to find the invite to check if it's valid
       const familyId = await familyService.acceptInvite(inviteCode, user.uid, userName);
+      console.log(`Successfully joined family with ID: ${familyId}`);
+      
+      // Update the user context to include the new familyId
+      user.familyId = familyId;
       
       // Reload family data
+      console.log(`Loading family data for newly joined family: ${familyId}`);
       const familyData = await familyService.getFamilyById(familyId);
       setFamily(familyData);
       
+      // Also load the members to update the UI
+      const familyMembers = await familyService.getAllFamilyMembers(familyId);
+      setMembers(familyMembers || []);
+      
+      console.log(`Family join process completed successfully`);
       return familyId;
     } catch (err) {
       console.error('Error joining family:', err);
-      setError(err.message);
+      setError(err.message || 'Failed to join family. Please try again.');
       throw err;
     } finally {
       setLoading(false);

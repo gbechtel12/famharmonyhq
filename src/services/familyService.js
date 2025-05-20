@@ -33,12 +33,34 @@ export const familyService = {
 
   async addMemberToFamily(familyId, userId) {
     try {
+      console.log(`Adding user ${userId} to family ${familyId}`);
+      
+      // First check if the family exists
       const familyRef = doc(db, 'families', familyId);
+      const familyDoc = await getDoc(familyRef);
+      
+      if (!familyDoc.exists()) {
+        console.error(`Family ${familyId} not found`);
+        throw new Error('Family not found');
+      }
+      
+      // Check if user is already in the members array to avoid duplicates
+      const familyData = familyDoc.data();
+      if (familyData.members && familyData.members.includes(userId)) {
+        console.log(`User ${userId} is already a member of family ${familyId}`);
+        return; // Already a member, no action needed
+      }
+      
+      // Add the user to the members array
+      console.log(`Updating family ${familyId} to add member ${userId}`);
       await updateDoc(familyRef, {
-        members: arrayUnion(userId)
+        members: arrayUnion(userId),
+        updatedAt: new Date().toISOString()
       });
+      
+      console.log(`Successfully added user ${userId} to family ${familyId}`);
     } catch (error) {
-      console.error('Error adding member to family:', error);
+      console.error(`Error adding member ${userId} to family ${familyId}:`, error);
       throw error;
     }
   },
@@ -191,12 +213,15 @@ export const familyService = {
 
   async acceptInvite(inviteCodeOrId, userId, userName = null) {
     try {
+      console.log(`User ${userId} attempting to accept invite with code: ${inviteCodeOrId}`);
+      
       // Try to find the invite
       let invite;
       
       try {
         // First, try to find by code
         invite = await this.findInviteByCode(inviteCodeOrId);
+        console.log('Found invite:', invite);
       } catch (err) {
         console.error('Error finding invite by code:', err);
         throw new Error('Invalid code');
@@ -217,7 +242,9 @@ export const familyService = {
         }
       }
 
-      // Add user to family members array
+      // Important: First add the user's UID to the family members array
+      // This establishes the relationship needed for subsequent operations
+      console.log(`Adding user ${userId} to family members array for family ${invite.familyId}`);
       await this.addMemberToFamily(invite.familyId, userId);
       
       // Update user document with family ID and other info
@@ -232,16 +259,21 @@ export const familyService = {
         userData.displayName = userName;
       }
       
+      console.log(`Updating user profile for ${userId} with family data:`, userData);
       await userService.updateUserProfile(userId, userData);
       
       // Mark the invite as accepted
       const collectionPath = invite.collection || 'invites';
       const inviteRef = doc(db, collectionPath, invite.id);
-      await updateDoc(inviteRef, { 
+      
+      console.log(`Marking invite ${invite.id} as accepted by user ${userId}`);
+      const updateData = { 
         status: 'accepted',
         acceptedBy: userId,
         acceptedAt: new Date().toISOString() 
-      });
+      };
+      
+      await updateDoc(inviteRef, updateData);
 
       console.log(`User ${userId} successfully joined family ${invite.familyId} with invite code ${inviteCodeOrId}`);
       return invite.familyId;
