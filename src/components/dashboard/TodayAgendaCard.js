@@ -61,7 +61,8 @@ function TodayAgendaCard({ fullScreen = false }) {
             return {
               id: item.id || `event-${Date.now()}-${Math.random()}`,
               title: item.title || 'Untitled Event',
-              time: item.startTime ? format(item.startTime.toDate(), 'HH:mm') : '',
+              time: item.startTime ? format(item.startTime.toDate(), 'HH:mm') : 
+                    item.start ? format(item.start.toDate(), 'HH:mm') : '',
               type: 'event'
             };
           } else if (item.type === 'chore') {

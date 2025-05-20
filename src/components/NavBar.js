@@ -24,6 +24,9 @@ import {
   Logout,
 } from '@mui/icons-material';
 
+// Import custom CSS
+import '../styles/navbar.css';
+
 // Hero icons
 import { 
   Bars3Icon, 
@@ -48,10 +51,10 @@ import { styled } from '@mui/material/styles';
 
 const StyledAppBar = styled(AppBar)(({ theme }) => ({
   backgroundColor: theme.palette.mode === 'dark' 
-    ? 'rgba(22, 28, 36, 0.95)' 
-    : 'rgba(255, 255, 255, 0.95)',
-  backdropFilter: 'blur(8px)',
-  WebkitBackdropFilter: 'blur(8px)',
+    ? 'rgba(22, 28, 36, 0.98)' 
+    : 'rgba(255, 255, 255, 0.98)',
+  backdropFilter: 'blur(10px)',
+  WebkitBackdropFilter: 'blur(10px)',
   color: theme.palette.text.primary,
   boxShadow: theme.palette.mode === 'dark' 
     ? '0 1px 3px rgba(0,0,0,0.4)' 
@@ -59,7 +62,7 @@ const StyledAppBar = styled(AppBar)(({ theme }) => ({
   position: 'sticky',
   top: 0,
   zIndex: 1100,
-  height: 64,
+  height: 56,
   borderBottom: theme.palette.mode === 'dark' 
     ? '1px solid rgba(255, 255, 255, 0.08)' 
     : '1px solid rgba(0, 0, 0, 0.06)'
@@ -108,13 +111,15 @@ const LogoText = styled(Typography)(({ theme }) => ({
 
 const NavButton = styled(Box)(({ theme, isActive }) => ({
   cursor: 'pointer',
-  padding: '6px 12px',
+  padding: '6px 10px',
   height: 40,
   display: 'flex',
   alignItems: 'center',
   borderRadius: theme.shape.borderRadius,
   transition: 'all 0.2s ease',
   fontWeight: isActive ? 600 : 500,
+  fontSize: '0.875rem',
+  whiteSpace: 'nowrap',
   color: isActive ? theme.palette.primary.main : theme.palette.text.primary,
   backgroundColor: isActive ? (theme.palette.mode === 'dark' ? 'rgba(69, 133, 245, 0.15)' : 'rgba(69, 133, 245, 0.08)') : 'transparent',
   '&:hover': {
@@ -205,18 +210,18 @@ export default function NavBar() {
 
   // Main navigation items - keep the most important ones for the top bar
   const mainNavItems = [
-    { path: '/dashboard', label: 'Dashboard', icon: ArrowsPointingOutIcon },
-    { path: '/calendar', label: 'Calendar', icon: CalendarIcon },
-    { path: '/agenda', label: 'Daily Agenda', icon: ViewColumnsIcon },
-    { path: '/chores', label: 'Chores', icon: ClipboardDocumentListIcon },
-    { path: '/rewards', label: 'Rewards', icon: StarIcon },
-    { path: '/meals', label: 'Meal Planner', icon: HomeIcon }
+    { path: '/dashboard', label: 'Dashboard', shortLabel: 'Dashboard', icon: ArrowsPointingOutIcon },
+    { path: '/calendar', label: 'Calendar', shortLabel: 'Calendar', icon: CalendarIcon },
+    { path: '/agenda', label: 'Daily Agenda', shortLabel: 'Agenda', icon: ViewColumnsIcon },
+    { path: '/chores', label: 'Chores', shortLabel: 'Chores', icon: ClipboardDocumentListIcon },
+    { path: '/rewards', label: 'Rewards', shortLabel: 'Rewards', icon: StarIcon },
+    { path: '/meals', label: 'Meal Planner', shortLabel: 'Meals', icon: HomeIcon },
+    { path: '/grocery', label: 'Grocery List', shortLabel: 'Grocery', icon: ShoppingCartIcon }
   ];
   
   // Additional navigation items for the drawer
   const allNavItems = [
     ...mainNavItems,
-    { path: '/grocery', label: 'Grocery List', icon: ShoppingCartIcon },
     { path: '/settings', label: 'Settings', icon: Cog6ToothIcon },
     { path: '/tailwind-example', label: 'UI Examples', icon: SwatchIcon }
   ];
@@ -257,8 +262,8 @@ export default function NavBar() {
   return (
     <>
       <StyledAppBar elevation={0} className={scrolled ? 'scrolled' : ''}>
-        <Toolbar disableGutters>
-          <Container maxWidth="xl">
+        <Toolbar disableGutters sx={{ minHeight: 56 }}>
+          <Container maxWidth="xl" sx={{ px: { xs: 1, sm: 2, md: 3 } }}>
             <Box sx={{ display: 'flex', alignItems: 'center', height: '100%', px: { xs: 1, sm: 2 } }}>
               {/* Mobile menu button */}
               <Box sx={{ display: { xs: 'flex', md: 'none' } }}>
@@ -277,7 +282,7 @@ export default function NavBar() {
                 sx={{ 
                   display: { xs: 'none', md: 'flex' }, 
                   alignItems: 'center', 
-                  gap: 2,
+                  gap: 1,
                   flex: 1,
                   justifyContent: 'flex-end'
                 }}
@@ -290,12 +295,12 @@ export default function NavBar() {
                       isActive={isActive}
                       onClick={() => navigate(item.path)}
                       sx={{ display: 'flex', alignItems: 'center' }}
-                      className={isActive ? 'active' : ''}
+                      className={`${isActive ? 'active' : ''} nav-button`}
                     >
-                      <Box sx={{ mr: 0.5, display: 'flex', alignItems: 'center' }}>
+                      <Box sx={{ mr: 0.5, display: 'flex', alignItems: 'center' }} className="nav-icon">
                         <HeroIcon icon={item.icon} />
                       </Box>
-                      {item.label}
+                      <span className="nav-truncate">{item.shortLabel}</span>
                     </NavButton>
                   );
                 })}
@@ -307,7 +312,7 @@ export default function NavBar() {
                   display: 'flex',
                   justifyContent: 'center',
                   flex: { xs: 1, md: 0 },
-                  mx: { xs: 2, md: 4 }
+                  mx: { xs: 2, md: 2 }
                 }}
               >
                 <LogoText onClick={() => navigate('/dashboard')}>
@@ -320,12 +325,12 @@ export default function NavBar() {
                 sx={{ 
                   display: { xs: 'none', md: 'flex' }, 
                   alignItems: 'center', 
-                  gap: 2,
+                  gap: 1,
                   flex: 1,
                   justifyContent: 'flex-start'
                 }}
               >
-                {mainNavItems.slice(3, 6).map((item) => {
+                {mainNavItems.slice(3).map((item) => {
                   const isActive = location.pathname === item.path;
                   return (
                     <NavButton
@@ -333,12 +338,12 @@ export default function NavBar() {
                       isActive={isActive}
                       onClick={() => navigate(item.path)}
                       sx={{ display: 'flex', alignItems: 'center' }}
-                      className={isActive ? 'active' : ''}
+                      className={`${isActive ? 'active' : ''} nav-button`}
                     >
-                      <Box sx={{ mr: 0.5, display: 'flex', alignItems: 'center' }}>
+                      <Box sx={{ mr: 0.5, display: 'flex', alignItems: 'center' }} className="nav-icon">
                         <HeroIcon icon={item.icon} />
                       </Box>
-                      {item.label}
+                      <span className="nav-truncate">{item.shortLabel}</span>
                     </NavButton>
                   );
                 })}
@@ -476,13 +481,12 @@ export default function NavBar() {
           }
         }}
       >
-        <Box sx={{ pt: 3, pb: 2 }}>
+        <Box sx={{ pt: 2, pb: 1 }}>
           <Box 
             sx={{ 
               display: 'flex', 
               justifyContent: 'center', 
-              mb: 3, 
-              mt: 1 
+              mb: 2
             }}
           >
             <LogoText 

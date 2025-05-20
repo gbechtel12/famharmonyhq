@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { 
   Card, 
   CardHeader, 
@@ -18,42 +18,63 @@ import {
 import ShoppingCartIcon from '@mui/icons-material/ShoppingCart';
 import CheckBoxOutlineBlankIcon from '@mui/icons-material/CheckBoxOutlineBlank';
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useFamily } from '../../contexts/FamilyContext';
+import { useFeedback } from '../../contexts/FeedbackContext';
 import { groceryService } from '../../services/groceryService';
+import { withErrorHandling } from '../../utils/errorHandler';
 import EmptyState from '../common/EmptyState';
 import ErrorState from '../common/ErrorState';
 
-function GroceryListCard({ fullScreen = false }) {
+function GroceryListCard({ fullScreen = false, isLoading = false }) {
   const theme = useTheme();
+  const navigate = useNavigate();
   const { family } = useFamily();
+  const { handleError } = useFeedback();
   const [groceryItems, setGroceryItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  useEffect(() => {
-    const fetchGroceryList = async () => {
-      if (!family?.id) {
-        setLoading(false);
-        return;
-      }
+  const fetchGroceryList = useCallback(async () => {
+    if (!family?.id) {
+      setLoading(false);
+      return;
+    }
+    
+    setLoading(true);
+    console.log(`Fetching grocery list for family ${family.id}`);
+    
+    try {
+      // Use the withErrorHandling utility for better error handling
+      const groceryList = await withErrorHandling(
+        () => groceryService.getGroceryList(family.id),
+        {
+          context: 'grocery-list-card',
+          dataType: 'groceryList',
+          fallbackData: { items: [] }
+        }
+      );
       
-      try {
-        setLoading(true);
-        
-        // Use the groceryService to fetch grocery items
-        const groceryList = await groceryService.getGroceryList(family.id);
-        setGroceryItems(groceryList.items || []);
-        setLoading(false);
-      } catch (err) {
-        console.error('Error fetching grocery list:', err);
-        setError('Unable to load grocery list');
-        setLoading(false);
-      }
-    };
+      console.log(`Loaded grocery list with ${groceryList.items?.length || 0} items`);
+      setGroceryItems(groceryList.items || []);
+      setError(null);
+    } catch (err) {
+      console.error('Error fetching grocery list:', err);
+      handleError(err, 'grocery-list-card');
+      setError('Unable to load grocery list');
+    } finally {
+      setLoading(false);
+    }
+  }, [family, handleError]);
 
-    fetchGroceryList();
-  }, [family]);
+  useEffect(() => {
+    if (!family?.id) return;
+    
+    console.log(`Loading grocery list for family ${family.id} (isLoading: ${isLoading})`);
+    fetchGroceryList().catch(err => {
+      console.error('Failed to fetch grocery list:', err);
+    });
+  }, [fetchGroceryList, family?.id, isLoading]);
 
   // Define theme-aware styles
   const cardBackground = theme.palette.mode === 'dark' 
@@ -122,7 +143,7 @@ function GroceryListCard({ fullScreen = false }) {
           <ErrorState 
             title="Couldn't load grocery list" 
             message={error}
-            onRetry={() => window.location.reload()}
+            onRetry={fetchGroceryList}
           />
         </CardContent>
       </Card>
@@ -154,7 +175,7 @@ function GroceryListCard({ fullScreen = false }) {
             message="Add items to your grocery list to see them here."
             icon={<ShoppingCartIcon />}
             actionText="Add Items"
-            onAction={() => window.location.href = '/grocery-list'}
+            onAction={() => navigate('/grocery')}
           />
         </CardContent>
       </Card>
@@ -233,7 +254,7 @@ function GroceryListCard({ fullScreen = false }) {
         <Box sx={{ p: 2, pt: 1 }}>
           <Button
             component={Link}
-            to="/grocery-list"
+            to="/grocery"
             endIcon={<ArrowForwardIcon />}
             variant="outlined"
             size="small"

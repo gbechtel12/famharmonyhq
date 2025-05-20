@@ -1,0 +1,33 @@
+/* Custom styles for the navbar */
+.nav-truncate {
+  max-width: 120px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.nav-icon {
+  min-width: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Hover effect for nav buttons */
+.nav-button:hover {
+  transform: translateY(-2px);
+  transition: transform 0.2s ease;
+}
+
+/* Responsive adjustments */
+@media (max-width: 1200px) {
+  .nav-truncate {
+    max-width: 100px;
+  }
+}
+
+@media (max-width: 992px) {
+  .nav-truncate {
+    max-width: 80px;
+  }
+} 

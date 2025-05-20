@@ -20,13 +20,17 @@ import {
 import {
   PersonAdd as PersonAddIcon,
   ContentCopy as ContentCopyIcon,
-  Check as CheckIcon
+  Check as CheckIcon,
+  ChildCare as ChildCareIcon
 } from '@mui/icons-material';
 import { useFamily } from '../../contexts/FamilyContext';
+import { useAuth } from '../../contexts/AuthContext';
 import Loader from '../common/Loader';
+import AddChildModal from './AddChildModal';
 
 export default function FamilyManagement() {
-  const { family, members, loading, error, createFamilyInvite } = useFamily();
+  const { user } = useAuth();
+  const { family, members, loading, error, createFamilyInvite, reloadMembers } = useFamily();
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteCode, setInviteCode] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
@@ -34,6 +38,7 @@ export default function FamilyManagement() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showSnackbar, setShowSnackbar] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [addChildModalOpen, setAddChildModalOpen] = useState(false);
 
   const handleInvite = async (e) => {
     e.preventDefault();
@@ -77,6 +82,16 @@ export default function FamilyManagement() {
 
   const handleCloseSnackbar = () => {
     setShowSnackbar(false);
+  };
+
+  const handleAddChildSuccess = async () => {
+    try {
+      // Reload the members list to show the new child
+      await reloadMembers();
+      setSuccessMessage('Child profile added successfully');
+    } catch (err) {
+      setLocalError('Child was added but failed to refresh members list');
+    }
   };
 
   if (loading) {
@@ -172,30 +187,85 @@ export default function FamilyManagement() {
         <Divider sx={{ my: 2 }} />
 
         <Box>
-          <Typography variant="h6" component="h3" gutterBottom>
-            Family Members
-          </Typography>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+            <Typography variant="h6" component="h3">
+              Family Members
+            </Typography>
+            
+            <Button
+              variant="outlined"
+              startIcon={<ChildCareIcon />}
+              size="small"
+              onClick={() => setAddChildModalOpen(true)}
+            >
+              Add Child
+            </Button>
+          </Box>
           
           {members && members.length > 0 ? (
             <List>
-              {members.map((member) => (
-                <ListItem key={member.id}>
-                  <ListItemAvatar>
-                    <Avatar>{member.name?.charAt(0).toUpperCase()}</Avatar>
-                  </ListItemAvatar>
-                  <ListItemText 
-                    primary={member.name} 
-                    secondary={member.email}
-                    primaryTypographyProps={{ fontWeight: 500 }}
-                  />
-                  <Chip 
-                    label={member.type === 'child' ? 'Child' : 'Adult'}
-                    color={member.type === 'child' ? 'secondary' : 'primary'}
-                    size="small"
-                    variant="outlined"
-                  />
-                </ListItem>
-              ))}
+              {/* Group and display members by type */}
+              {members.some(m => m.type === 'adult') && (
+                <>
+                  <ListItem sx={{ py: 0 }}>
+                    <Typography variant="subtitle2" color="text.secondary">
+                      Adults
+                    </Typography>
+                  </ListItem>
+                  {members
+                    .filter(member => member.type === 'adult')
+                    .map((member) => (
+                      <ListItem key={member.id}>
+                        <ListItemAvatar>
+                          <Avatar>{member.name?.charAt(0).toUpperCase()}</Avatar>
+                        </ListItemAvatar>
+                        <ListItemText 
+                          primary={member.name} 
+                          secondary={member.email}
+                          primaryTypographyProps={{ fontWeight: 500 }}
+                        />
+                        <Chip 
+                          label="Adult"
+                          color="primary"
+                          size="small"
+                          variant="outlined"
+                        />
+                      </ListItem>
+                    ))}
+                </>
+              )}
+              
+              {members.some(m => m.type === 'child') && (
+                <>
+                  <ListItem sx={{ py: 0, mt: 1 }}>
+                    <Typography variant="subtitle2" color="text.secondary">
+                      Children
+                    </Typography>
+                  </ListItem>
+                  {members
+                    .filter(member => member.type === 'child')
+                    .map((member) => (
+                      <ListItem key={member.id}>
+                        <ListItemAvatar>
+                          <Avatar sx={{ bgcolor: 'secondary.main' }}>
+                            {member.name?.charAt(0).toUpperCase()}
+                          </Avatar>
+                        </ListItemAvatar>
+                        <ListItemText 
+                          primary={member.name} 
+                          secondary={member.birthYear ? `Birth Year: ${member.birthYear}` : null}
+                          primaryTypographyProps={{ fontWeight: 500 }}
+                        />
+                        <Chip 
+                          label="Child"
+                          color="secondary"
+                          size="small"
+                          variant="outlined"
+                        />
+                      </ListItem>
+                    ))}
+                </>
+              )}
             </List>
           ) : (
             <Typography variant="body2" color="textSecondary">
@@ -210,6 +280,13 @@ export default function FamilyManagement() {
         autoHideDuration={2000}
         onClose={handleCloseSnackbar}
         message="Invite code copied to clipboard"
+      />
+      
+      <AddChildModal
+        open={addChildModalOpen}
+        onClose={() => setAddChildModalOpen(false)}
+        familyId={family?.id}
+        onSuccess={handleAddChildSuccess}
       />
     </Card>
   );

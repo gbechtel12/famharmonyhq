@@ -32,9 +32,12 @@ import {
   RestaurantMenu as RestaurantMenuIcon,
 } from '@mui/icons-material';
 import { useAuth } from '../contexts/AuthContext';
+import { useFeedback } from '../contexts/FeedbackContext';
 import Loader from '../components/common/Loader';
+import ErrorState from '../components/common/ErrorState';
 import { groceryService } from '../services/groceryService';
 import { mealService } from '../services/mealService';
+import { withErrorHandling } from '../utils/errorHandler';
 
 // Category options for items
 const CATEGORIES = [
@@ -52,6 +55,7 @@ const CATEGORIES = [
 
 function GroceryListPage() {
   const { user } = useAuth();
+  const { showSuccess, showError, handleError } = useFeedback();
   const [groceryList, setGroceryList] = useState({ items: [] });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -60,26 +64,33 @@ function GroceryListPage() {
   const [addMealDialogOpen, setAddMealDialogOpen] = useState(false);
   const [groupByCategory, setGroupByCategory] = useState(true);
 
+  const loadGroceryList = async () => {
+    if (!user?.familyId) {
+      setError('Please join or create a family to use the grocery list.');
+      setLoading(false);
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const list = await withErrorHandling(
+        () => groceryService.getGroceryList(user.familyId),
+        {
+          context: 'grocery-list',
+          dataType: 'groceryList'
+        }
+      );
+      setGroceryList(list);
+      setError(null);
+    } catch (err) {
+      handleError(err, 'grocery-list');
+      setError('Failed to load grocery list');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    const loadGroceryList = async () => {
-      if (!user?.familyId) {
-        setError('Please join or create a family to use the grocery list.');
-        setLoading(false);
-        return;
-      }
-
-      try {
-        setLoading(true);
-        const list = await groceryService.getGroceryList(user.familyId);
-        setGroceryList(list);
-        setLoading(false);
-      } catch (err) {
-        console.error('Error loading grocery list:', err);
-        setError('Failed to load grocery list');
-        setLoading(false);
-      }
-    };
-
     loadGroceryList();
   }, [user?.familyId]);
 
@@ -87,11 +98,15 @@ function GroceryListPage() {
     if (!newItemName.trim()) return;
 
     try {
+      console.log('Adding item to grocery list:', newItemName, newItemCategory);
+      console.log('Family ID:', user.familyId);
+      
       const newItem = {
         name: newItemName.trim(),
         category: newItemCategory
       };
 
+      // Add the item to the grocery list
       await groceryService.addGroceryItem(user.familyId, newItem);
       
       // Reload the list to get the updated data
@@ -101,19 +116,26 @@ function GroceryListPage() {
       // Clear the form
       setNewItemName('');
       setNewItemCategory('other');
+      
+      showSuccess(`Added "${newItemName}" to grocery list`);
     } catch (err) {
-      console.error('Error adding grocery item:', err);
-      setError('Failed to add item to grocery list');
+      console.error('Error adding item to grocery list:', err);
+      showError(`Failed to add "${newItemName}": ${err.message}`);
     }
   };
 
   const handleToggleCompleted = async (itemId, currentCompleted) => {
     try {
-      await groceryService.updateGroceryItem(user.familyId, itemId, {
-        completed: !currentCompleted
-      });
+      await withErrorHandling(
+        () => groceryService.updateGroceryItem(user.familyId, itemId, {
+          completed: !currentCompleted
+        }),
+        {
+          context: 'grocery-list-toggle-item'
+        }
+      );
       
-      // Update local state
+      // Update local state for immediate feedback
       setGroceryList(prevList => {
         const updatedItems = prevList.items.map(item => {
           if (item.id === itemId) {
@@ -125,38 +147,51 @@ function GroceryListPage() {
         return { ...prevList, items: updatedItems };
       });
     } catch (err) {
-      console.error('Error updating grocery item:', err);
-      setError('Failed to update item');
+      handleError(err, 'grocery-list-toggle-item');
     }
   };
 
-  const handleRemoveItem = async (itemId) => {
+  const handleRemoveItem = async (itemId, itemName) => {
     try {
-      await groceryService.removeGroceryItem(user.familyId, itemId);
+      await withErrorHandling(
+        () => groceryService.removeGroceryItem(user.familyId, itemId),
+        {
+          context: 'grocery-list-remove-item'
+        }
+      );
       
       // Update local state
       setGroceryList(prevList => {
         const updatedItems = prevList.items.filter(item => item.id !== itemId);
         return { ...prevList, items: updatedItems };
       });
+      
+      showSuccess(`Removed "${itemName}" from grocery list`);
     } catch (err) {
-      console.error('Error removing grocery item:', err);
-      setError('Failed to remove item');
+      handleError(err, 'grocery-list-remove-item');
+      showError(`Failed to remove "${itemName}"`);
     }
   };
 
   const handleClearCompleted = async () => {
     try {
-      await groceryService.clearCompletedItems(user.familyId);
+      await withErrorHandling(
+        () => groceryService.clearCompletedItems(user.familyId),
+        {
+          context: 'grocery-list-clear-completed'
+        }
+      );
       
       // Update local state
       setGroceryList(prevList => {
         const updatedItems = prevList.items.filter(item => !item.completed);
         return { ...prevList, items: updatedItems };
       });
+      
+      showSuccess('Cleared completed items');
     } catch (err) {
-      console.error('Error clearing completed items:', err);
-      setError('Failed to clear completed items');
+      handleError(err, 'grocery-list-clear-completed');
+      showError('Failed to clear completed items');
     }
   };
 
@@ -327,7 +362,7 @@ function GroceryListPage() {
                     secondaryAction={
                       <IconButton 
                         edge="end" 
-                        onClick={() => handleRemoveItem(item.id)}
+                        onClick={() => handleRemoveItem(item.id, item.name)}
                         aria-label="delete"
                       >
                         <DeleteIcon />

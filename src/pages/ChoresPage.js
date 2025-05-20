@@ -75,11 +75,20 @@ function ChoresPage() {
 
   const handleChange = useCallback((e) => {
     const { name, value } = e.target;
+    console.log(`Field ${name} changed to:`, value);
+    
+    // Special handling for assignedTo
+    if (name === 'assignedTo') {
+      console.log('Assigning to family member with ID:', value);
+      const member = familyMembers.find(m => m.id === value);
+      console.log('Selected family member:', member);
+    }
+    
     setFormData(prev => ({
       ...prev,
       [name]: value
     }));
-  }, []);
+  }, [familyMembers]);
 
   const handleSubmit = useCallback(async (e) => {
     e.preventDefault();
@@ -90,7 +99,12 @@ function ChoresPage() {
         throw new Error('No family ID found. Please join or create a family first.');
       }
 
-      const assignedMember = familyMembers.find(m => m.id === formData.assignedTo);
+      // Find the assigned family member
+      let assignedMember = null;
+      if (formData.assignedTo) {
+        assignedMember = familyMembers.find(m => m.id === formData.assignedTo);
+        console.log('Found assigned member:', assignedMember);
+      }
       
       const choreData = {
         ...formData,
@@ -98,9 +112,9 @@ function ChoresPage() {
         createdBy: user.uid,
         assignedTo: assignedMember ? {
           id: assignedMember.id,
-          name: assignedMember.name,
-          type: assignedMember.type,
-          color: assignedMember.color
+          name: assignedMember.name || assignedMember.displayName || 'Family Member',
+          type: assignedMember.type || 'adult',
+          color: assignedMember.color || '#2196F3' // default blue color
         } : null,
         status: selectedChore?.status || 'todo',
         completed: false,
@@ -224,6 +238,10 @@ function ChoresPage() {
 
   const handleEditChore = (chore) => {
     setSelectedChore(chore);
+    console.log('Editing chore:', chore);
+    console.log('Chore assignedTo:', chore.assignedTo);
+    console.log('Available family members:', familyMembers);
+    
     setFormData({
       title: chore.title || '',
       description: chore.description || '',
@@ -312,6 +330,7 @@ function ChoresPage() {
         console.log('Loading family members with familyId:', user.familyId);
         const members = await familyService.getAllFamilyMembers(user.familyId);
         console.log('Family members loaded successfully:', members?.length);
+        console.log('Family members:', members);
         setFamilyMembers(members || []);
       } catch (err) {
         console.error('Error loading family members:', err);
@@ -382,12 +401,13 @@ function ChoresPage() {
         onClose={() => setDialogOpen(false)}
         fullWidth
         maxWidth="sm"
+        keepMounted={false}
       >
         <DialogTitle>
           {selectedChore ? 'Edit Chore' : 'Add New Chore'}
         </DialogTitle>
-        <DialogContent>
-          <form onSubmit={handleSubmit}>
+        <DialogContent dividers>
+          <Box component="form" id="chore-form" onSubmit={handleSubmit} noValidate>
             <TextField
               autoFocus
               margin="dense"
@@ -417,38 +437,55 @@ function ChoresPage() {
               <Select
                 labelId="assign-to-label"
                 name="assignedTo"
-                value={formData.assignedTo}
+                value={formData.assignedTo || ''}
                 label="Assign To"
                 onChange={handleChange}
+                MenuProps={{
+                  PaperProps: {
+                    style: {
+                      maxHeight: 300
+                    }
+                  }
+                }}
+                renderValue={(selected) => {
+                  if (!selected) return "Unassigned";
+                  const member = familyMembers.find(m => m.id === selected);
+                  return member ? member.name : selected;
+                }}
               >
                 <MenuItem value="">
                   <em>Unassigned</em>
                 </MenuItem>
                 
-                {familyMembers.length > 0 ? (
-                  <>
-                    <ListSubheader>Adults</ListSubheader>
-                    {familyMembers
-                      .filter(member => member.type === 'adult')
-                      .map(member => (
-                        <MenuItem key={member.id} value={member.id}>
-                          {member.name}
-                        </MenuItem>
-                      ))}
-                    
-                    <ListSubheader>Children</ListSubheader>
-                    {familyMembers
-                      .filter(member => member.type === 'child')
-                      .map(member => (
-                        <MenuItem key={member.id} value={member.id}>
-                          {member.name}
-                        </MenuItem>
-                      ))}
-                  </>
-                ) : (
-                  <MenuItem disabled>No family members found</MenuItem>
-                )}
+                {/* Simplified flat list for testing */}
+                {familyMembers && familyMembers.map(member => (
+                  <MenuItem key={member.id} value={member.id}>
+                    {member.name || member.displayName || 'Family Member'} 
+                    ({member.type === 'child' ? 'Child' : 'Adult'})
+                  </MenuItem>
+                ))}
               </Select>
+              
+              {/* Debug buttons to directly set assignedTo */}
+              <Box sx={{ mt: 1, display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                <Typography variant="caption" sx={{ width: '100%' }}>Debug: Assign directly to:</Typography>
+                {familyMembers && familyMembers.map(member => (
+                  <Button 
+                    key={member.id}
+                    size="small"
+                    variant="outlined"
+                    onClick={() => {
+                      console.log('Direct assignment to:', member);
+                      setFormData(prev => ({
+                        ...prev,
+                        assignedTo: member.id
+                      }));
+                    }}
+                  >
+                    {member.name}
+                  </Button>
+                ))}
+              </Box>
             </FormControl>
             
             <TextField
@@ -519,14 +556,16 @@ function ChoresPage() {
                 sx={{ mb: 2 }}
               />
             )}
-          </form>
+          </Box>
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setDialogOpen(false)}>Cancel</Button>
           <Button 
-            onClick={handleSubmit} 
+            type="submit"
+            form="chore-form"
             disabled={submitting}
             variant="contained"
+            color="primary"
           >
             {submitting ? 'Saving...' : (selectedChore ? 'Update' : 'Create')}
           </Button>

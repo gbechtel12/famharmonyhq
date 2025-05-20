@@ -10,6 +10,7 @@ service cloud.firestore {
       return isAuthenticated() && 
              exists(/databases/$(database)/documents/families/$(familyId)) &&
              (get(/databases/$(database)/documents/families/$(familyId)).data.members.hasAny([request.auth.uid]) ||
+              exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
               get(/databases/$(database)/documents/users/$(request.auth.uid)).data.familyId == familyId);
     }
 
@@ -22,9 +23,11 @@ service cloud.firestore {
     // User profiles
     match /users/{userId} {
       allow read: if isAuthenticated() && 
-                  (request.auth.uid == userId || 
-                   exists(/databases/$(database)/documents/users/$(userId)) &&
-                   (isFamilyMember(resource.data.familyId) || hasFamilyId(resource.data.familyId)));
+                 (request.auth.uid == userId || 
+                  (exists(/databases/$(database)/documents/users/$(userId)) &&
+                   exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+                   get(/databases/$(database)/documents/users/$(userId)).data.familyId == 
+                   get(/databases/$(database)/documents/users/$(request.auth.uid)).data.familyId));
       
       allow create: if isAuthenticated() && request.auth.uid == userId;
       allow update: if isAuthenticated() && request.auth.uid == userId;
@@ -34,60 +37,88 @@ service cloud.firestore {
     match /familyInvites/{inviteId} {
       allow read: if isAuthenticated();
       allow create: if isAuthenticated() &&
-                   (isFamilyMember(request.resource.data.familyId) || hasFamilyId(request.resource.data.familyId));
+                    (request.resource.data.familyId == null || isFamilyMember(request.resource.data.familyId) || 
+                     hasFamilyId(request.resource.data.familyId));
       allow update: if isAuthenticated();
     }
 
     // Families
     match /families/{familyId} {
       allow read: if isAuthenticated() && 
-                  (resource.data.members.hasAny([request.auth.uid]) || hasFamilyId(familyId));
+                 (resource.data.members.hasAny([request.auth.uid]) || hasFamilyId(familyId));
       allow create: if isAuthenticated();
       allow update: if isAuthenticated() && 
                    (resource.data.members.hasAny([request.auth.uid]) || hasFamilyId(familyId));
 
-      // All sub-collections in families
-      match /{document=**} {
-        allow read, write: if isFamilyMember(familyId) || hasFamilyId(familyId);
+      // Family members (including children)
+      match /members/{memberId} {
+        allow read: if isAuthenticated() && 
+                   (resource == null || isFamilyMember(familyId) || hasFamilyId(familyId));
+        allow write: if isAuthenticated() && 
+                    (resource == null || isFamilyMember(familyId) || hasFamilyId(familyId));
       }
-
-      // Specific rules for subUsers
+      
+      // SubUsers (legacy child profiles)
       match /subUsers/{subUserId} {
-        allow read, write: if isFamilyMember(familyId) || hasFamilyId(familyId);
+        allow read: if isAuthenticated() && 
+                   (resource == null || isFamilyMember(familyId) || hasFamilyId(familyId));
+        allow write: if isAuthenticated() && 
+                    (resource == null || isFamilyMember(familyId) || hasFamilyId(familyId));
       }
 
       // Family rewards
       match /rewards/{rewardId} {
-        allow read, write: if isFamilyMember(familyId) || hasFamilyId(familyId);
+        allow read: if isAuthenticated() && 
+                   (resource == null || isFamilyMember(familyId) || hasFamilyId(familyId));
+        allow write: if isAuthenticated() && 
+                    (resource == null || isFamilyMember(familyId) || hasFamilyId(familyId));
       }
       
       // Family redemptions
       match /redemptions/{redemptionId} {
-        allow read, write: if isFamilyMember(familyId) || hasFamilyId(familyId);
+        allow read: if isAuthenticated() && 
+                   (resource == null || isFamilyMember(familyId) || hasFamilyId(familyId));
+        allow write: if isAuthenticated() && 
+                    (resource == null || isFamilyMember(familyId) || hasFamilyId(familyId));
       }
       
       // Family chores
       match /chores/{choreId} {
-        allow read, write: if isFamilyMember(familyId) || hasFamilyId(familyId);
+        allow read: if isAuthenticated() && 
+                   (resource == null || isFamilyMember(familyId) || hasFamilyId(familyId));
+        allow write: if isAuthenticated() && 
+                    (resource == null || isFamilyMember(familyId) || hasFamilyId(familyId));
       }
       
       // Family events
       match /events/{eventId} {
-        allow read, write: if isFamilyMember(familyId) || hasFamilyId(familyId);
+        allow read: if isAuthenticated() && 
+                   (resource == null || isFamilyMember(familyId) || hasFamilyId(familyId));
+        allow write: if isAuthenticated() && 
+                    (resource == null || isFamilyMember(familyId) || hasFamilyId(familyId));
       }
       
       // Family meal plans
       match /mealPlans/{documentId} {
-        allow read, write: if isFamilyMember(familyId) || hasFamilyId(familyId);
+        allow read: if isAuthenticated() && 
+                   (resource == null || isFamilyMember(familyId) || hasFamilyId(familyId));
+        allow write: if isAuthenticated() && 
+                    (resource == null || isFamilyMember(familyId) || hasFamilyId(familyId));
         
         match /weeks/{weekId} {
-          allow read, write: if isFamilyMember(familyId) || hasFamilyId(familyId);
+          allow read: if isAuthenticated() && 
+                     (resource == null || isFamilyMember(familyId) || hasFamilyId(familyId));
+          allow write: if isAuthenticated() && 
+                      (resource == null || isFamilyMember(familyId) || hasFamilyId(familyId));
         }
       }
       
       // Family grocery lists
       match /groceryLists/{listId} {
-        allow read, write: if isFamilyMember(familyId) || hasFamilyId(familyId);
+        allow read: if isAuthenticated() && 
+                   (resource == null || isFamilyMember(familyId) || hasFamilyId(familyId));
+        allow write: if isAuthenticated() && 
+                    (resource == null || isFamilyMember(familyId) || hasFamilyId(familyId));
       }
     }
     
@@ -95,66 +126,96 @@ service cloud.firestore {
     // Remove these after migrating all data to family subcollections
     
     match /chores/{choreId} {
-      allow read, write: if isAuthenticated() && 
-                         (resource == null || isFamilyMember(resource.data.familyId) || 
-                          hasFamilyId(resource.data.familyId));
+      allow read: if isAuthenticated() && 
+                 (resource == null || isFamilyMember(resource.data.familyId) || 
+                  hasFamilyId(resource.data.familyId));
+      allow write: if isAuthenticated() && 
+                  (resource == null || isFamilyMember(resource.data.familyId) || 
+                   hasFamilyId(resource.data.familyId));
     }
 
     match /events/{eventId} {
-      allow read, write: if isAuthenticated() && 
-                         (resource == null || isFamilyMember(resource.data.familyId) ||
-                          hasFamilyId(resource.data.familyId));
+      allow read: if isAuthenticated() && 
+                 (resource == null || isFamilyMember(resource.data.familyId) ||
+                  hasFamilyId(resource.data.familyId));
+      allow write: if isAuthenticated() && 
+                  (resource == null || isFamilyMember(resource.data.familyId) ||
+                   hasFamilyId(resource.data.familyId));
     }
 
     // Allow users to read/write their own calendar events
     match /userEvents/{userId} {
-      allow read, write: if isAuthenticated() && request.auth.uid == userId;
+      allow read: if isAuthenticated() && request.auth.uid == userId;
+      allow write: if isAuthenticated() && request.auth.uid == userId;
       
       match /events/{eventId} {
-        allow read, write: if isAuthenticated() && request.auth.uid == userId;
+        allow read: if isAuthenticated() && request.auth.uid == userId;
+        allow write: if isAuthenticated() && request.auth.uid == userId;
       }
     }
     
     // Allow access to the daily agenda data (consolidates events, chores, meals)
     match /dailyAgenda/{agendaId} {
       allow read: if isAuthenticated();
+      allow write: if false; // Only backend should write to this
     }
 
     // Family calendar events collection (legacy)
     match /familyEvents/{familyId} {
-      allow read, write: if isFamilyMember(familyId) || hasFamilyId(familyId);
+      allow read: if isAuthenticated() && 
+                 (resource == null || isFamilyMember(familyId) || hasFamilyId(familyId));
+      allow write: if isAuthenticated() && 
+                  (resource == null || isFamilyMember(familyId) || hasFamilyId(familyId));
       
       match /events/{eventId} {
-        allow read, write: if isFamilyMember(familyId) || hasFamilyId(familyId);
+        allow read: if isAuthenticated() && 
+                   (resource == null || isFamilyMember(familyId) || hasFamilyId(familyId));
+        allow write: if isAuthenticated() && 
+                    (resource == null || isFamilyMember(familyId) || hasFamilyId(familyId));
       }
     }
 
     // Legacy meal planner rules
     match /mealPlans/{familyId} {
-      allow read, write: if isFamilyMember(familyId) || hasFamilyId(familyId);
+      allow read: if isAuthenticated() && 
+                 (resource == null || isFamilyMember(familyId) || hasFamilyId(familyId));
+      allow write: if isAuthenticated() && 
+                  (resource == null || isFamilyMember(familyId) || hasFamilyId(familyId));
       
       match /weeks/{weekId} {
-        allow read, write: if isFamilyMember(familyId) || hasFamilyId(familyId);
+        allow read: if isAuthenticated() && 
+                   (resource == null || isFamilyMember(familyId) || hasFamilyId(familyId));
+        allow write: if isAuthenticated() && 
+                    (resource == null || isFamilyMember(familyId) || hasFamilyId(familyId));
       }
     }
 
     // Legacy grocery list rules
     match /groceryLists/{familyId} {
-      allow read, write: if isFamilyMember(familyId) || hasFamilyId(familyId);
+      allow read: if isAuthenticated() && 
+                 (resource == null || isFamilyMember(familyId) || hasFamilyId(familyId));
+      allow write: if isAuthenticated() && 
+                  (resource == null || isFamilyMember(familyId) || hasFamilyId(familyId));
     }
 
     // Legacy rewards store rules
     match /rewards/{rewardId} {
-      allow read, write: if isAuthenticated() && 
-                         (resource == null || isFamilyMember(resource.data.familyId) ||
-                          hasFamilyId(resource.data.familyId));
+      allow read: if isAuthenticated() && 
+                 (resource == null || isFamilyMember(resource.data.familyId) ||
+                  hasFamilyId(resource.data.familyId));
+      allow write: if isAuthenticated() && 
+                  (resource == null || isFamilyMember(resource.data.familyId) ||
+                   hasFamilyId(resource.data.familyId));
     }
 
     // Legacy redemption history rules
     match /redemptions/{redemptionId} {
-      allow read, write: if isAuthenticated() && 
-                         (resource == null || isFamilyMember(resource.data.familyId) ||
-                          hasFamilyId(resource.data.familyId));
+      allow read: if isAuthenticated() && 
+                 (resource == null || isFamilyMember(resource.data.familyId) ||
+                  hasFamilyId(resource.data.familyId));
+      allow write: if isAuthenticated() && 
+                  (resource == null || isFamilyMember(resource.data.familyId) ||
+                   hasFamilyId(resource.data.familyId));
     }
   }
 } 

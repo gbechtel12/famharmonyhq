@@ -125,12 +125,20 @@ export default function EventModal({
         throw new Error('End time must be after start time');
       }
 
+      // Add compatibility fields for startTime and endTime
+      const eventData = {
+        ...formData,
+        // Add these fields for compatibility with agenda system
+        startTime: new Date(formData.start),
+        endTime: new Date(formData.end)
+      };
+
       // Handle recurring events
       if (formData.recurrence !== 'none') {
-        const recurringEvents = generateRecurringEvents(formData);
+        const recurringEvents = generateRecurringEvents(eventData);
         await onSubmit(recurringEvents);
       } else {
-        await onSubmit(formData);
+        await onSubmit(eventData);
       }
       
       onClose();

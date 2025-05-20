@@ -26,7 +26,7 @@ import EmptyState from '../common/EmptyState';
 import ErrorState from '../common/ErrorState';
 import { useNavigate } from 'react-router-dom';
 
-function ChoresCard({ fullScreen = false }) {
+function ChoresCard({ fullScreen = false, isLoading = false }) {
   const theme = useTheme();
   const navigate = useNavigate();
   const { family } = useFamily();
@@ -43,6 +43,7 @@ function ChoresCard({ fullScreen = false }) {
     
     try {
       setLoading(true);
+      console.log('Fetching chores for dashboard...');
       
       // Fetch chores from Firestore
       const choresRef = collection(db, 'families', family.id, 'chores');
@@ -52,49 +53,77 @@ function ChoresCard({ fullScreen = false }) {
       const today = new Date();
       const dateStr = today.toISOString().split('T')[0];
       
+      // Convert snapshot to array of chores with their IDs
+      const allChores = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      
+      console.log(`Found ${allChores.length} total chores`);
+      
       // Filter chores that are due today
-      const todaysChores = snapshot.docs
-        .map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        }))
-        .filter(chore => {
-          // If the chore is already completed today, include it
-          if (chore.completedDates && chore.completedDates.includes(dateStr)) {
-            return true;
-          }
-          
-          // Otherwise, filter based on frequency
-          if (chore.frequency === 'daily') {
-            return true;
-          }
-          
-          if (chore.frequency === 'weekly') {
-            const dayOfWeek = today.toLocaleDateString('en-US', { weekday: 'lowercase' });
-            return chore.dayOfWeek === dayOfWeek;
-          }
-          
-          // For monthly or other frequencies, check the dueDate
-          if (chore.dueDate) {
+      const todaysChores = allChores.filter(chore => {
+        // If the chore is already completed today, include it
+        if (chore.completedDates && chore.completedDates.includes(dateStr)) {
+          return true;
+        }
+        
+        // Otherwise, filter based on frequency
+        if (chore.frequency === 'daily') {
+          return true;
+        }
+        
+        if (chore.frequency === 'weekly') {
+          const dayOfWeek = today.toLocaleDateString('en-US', { weekday: 'lowercase' });
+          return chore.dayOfWeek === dayOfWeek;
+        }
+        
+        // For monthly or other frequencies, check the dueDate
+        if (chore.dueDate) {
+          // Handle both Timestamp and string date formats
+          if (chore.dueDate.seconds) {
             const dueDate = new Date(chore.dueDate.seconds * 1000);
             return dueDate.toISOString().split('T')[0] === dateStr;
+          } else if (typeof chore.dueDate === 'string') {
+            return chore.dueDate === dateStr;
           }
-          
-          return false;
-        });
+        }
+        
+        // If no specific criteria, include the chore by default
+        return true;
+      });
+      
+      console.log(`Found ${todaysChores.length} chores for today`);
+      // Log details about assigned chores
+      todaysChores.forEach(chore => {
+        if (chore.assignedTo) {
+          console.log(`Chore "${chore.title || chore.name}" assigned to:`, chore.assignedTo);
+        } else {
+          console.log(`Chore "${chore.title || chore.name}" is unassigned`);
+        }
+      });
       
       setChores(todaysChores);
+      setError(null);
       setLoading(false);
     } catch (err) {
       console.error('Error fetching chores:', err);
       setError('Unable to load chores');
       setLoading(false);
+      throw err; // Re-throw so the effect can catch it
     }
   }, [family]);
 
+  // Load chores when the component mounts or family changes
   useEffect(() => {
-    fetchChores();
-  }, [fetchChores]);
+    if (!family?.id) return;
+    
+    console.log(`Loading chores for family ${family.id} (isLoading: ${isLoading})`);
+    fetchChores().catch(err => {
+      console.error('Error in fetchChores:', err);
+      setError('Failed to load chores. Please try again.');
+    });
+  }, [fetchChores, isLoading, family?.id]);
 
   const handleToggleChore = async (choreId) => {
     if (!family?.id) return;
@@ -381,11 +410,13 @@ function ChoresCard({ fullScreen = false }) {
                     </Typography>
                   }
                   secondary={
-                    chore.assignedTo && (
+                    chore.assignedTo ? (
                       <Box sx={{ display: 'flex', alignItems: 'center', mt: 0.5 }}>
                         <PersonIcon sx={{ fontSize: 14, mr: 0.5, color: 'text.secondary' }} />
                         <Typography variant="caption" color="text.secondary">
-                          {chore.assignedTo}
+                          {typeof chore.assignedTo === 'object' 
+                            ? (chore.assignedTo.name || chore.assignedTo.displayName || 'Family Member')
+                            : chore.assignedTo}
                         </Typography>
                         {chore.points > 0 && (
                           <Typography variant="caption" color="text.secondary" sx={{ ml: 1 }}>
@@ -393,7 +424,7 @@ function ChoresCard({ fullScreen = false }) {
                           </Typography>
                         )}
                       </Box>
-                    )
+                    ) : null
                   }
                 />
               </ListItem>

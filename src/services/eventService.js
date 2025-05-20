@@ -31,6 +31,8 @@ export const eventService = {
             ...event,
             start: Timestamp.fromDate(new Date(event.start)),
             end: Timestamp.fromDate(new Date(event.end)),
+            startTime: event.startTime ? Timestamp.fromDate(new Date(event.startTime)) : Timestamp.fromDate(new Date(event.start)),
+            endTime: event.endTime ? Timestamp.fromDate(new Date(event.endTime)) : Timestamp.fromDate(new Date(event.end)),
             createdAt: Timestamp.now(),
             category: event.category || 'personal'
           };
@@ -47,6 +49,8 @@ export const eventService = {
         ...eventData,
         start: Timestamp.fromDate(new Date(eventData.start)),
         end: Timestamp.fromDate(new Date(eventData.end)),
+        startTime: eventData.startTime ? Timestamp.fromDate(new Date(eventData.startTime)) : Timestamp.fromDate(new Date(eventData.start)),
+        endTime: eventData.endTime ? Timestamp.fromDate(new Date(eventData.endTime)) : Timestamp.fromDate(new Date(eventData.end)),
         createdAt: Timestamp.now(),
         category: eventData.category || 'personal'
       };
@@ -94,9 +98,22 @@ export const eventService = {
       };
       if (updateData.start) {
         updates.start = Timestamp.fromDate(new Date(updateData.start));
+        // Also update startTime for compatibility
+        updates.startTime = Timestamp.fromDate(new Date(updateData.start));
       }
       if (updateData.end) {
         updates.end = Timestamp.fromDate(new Date(updateData.end));
+        // Also update endTime for compatibility
+        updates.endTime = Timestamp.fromDate(new Date(updateData.end));
+      }
+      // Handle direct updates to startTime/endTime if present
+      if (updateData.startTime && !updateData.start) {
+        updates.startTime = Timestamp.fromDate(new Date(updateData.startTime));
+        updates.start = Timestamp.fromDate(new Date(updateData.startTime));
+      }
+      if (updateData.endTime && !updateData.end) {
+        updates.endTime = Timestamp.fromDate(new Date(updateData.endTime));
+        updates.end = Timestamp.fromDate(new Date(updateData.endTime));
       }
       await updateDoc(eventRef, updates);
       return { id: eventId, ...updates };

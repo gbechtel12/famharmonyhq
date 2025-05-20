@@ -12,8 +12,11 @@ import CssBaseline from '@mui/material/CssBaseline';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { FamilyProvider, useFamily } from './contexts/FamilyContext';
 import { ThemeProvider, useThemeMode } from './contexts/ThemeContext';
+import { FeedbackProvider } from './contexts/FeedbackContext';
 import Loader from './components/common/Loader';
 import ErrorBoundary from './components/common/ErrorBoundary';
+import ErrorBoundaryWithRouter from './components/common/ErrorBoundaryWithRouter';
+import OfflineIndicator from './components/common/OfflineIndicator';
 import NavBar from './components/NavBar';
 import getTheme from './theme';
 
@@ -64,6 +67,12 @@ function Root() {
   const { themeMode } = useThemeMode();
   const theme = getTheme(themeMode);
 
+  // Handle retry when network reconnects
+  const handleNetworkRetry = () => {
+    // Reload current data from pages
+    window.dispatchEvent(new CustomEvent('network-reconnected'));
+  };
+
   return (
     <MuiThemeProvider theme={theme}>
       <CssBaseline />
@@ -72,6 +81,7 @@ function Root() {
         <main className="main-content">
           <Outlet />
         </main>
+        <OfflineIndicator onRetry={handleNetworkRetry} showFixed={true} />
       </div>
     </MuiThemeProvider>
   );
@@ -79,10 +89,10 @@ function Root() {
 
 const router = createBrowserRouter(
   createRoutesFromElements(
-    <Route path="/" element={<Root />}>
+    <Route path="/" element={<Root />} errorElement={<ErrorBoundaryWithRouter />}>
       <Route
         index
-        element={<Navigate to="/calendar" replace />}
+        element={<Navigate to="/dashboard" replace />}
       />
       <Route
         path="calendar"
@@ -208,6 +218,10 @@ const router = createBrowserRouter(
           </ProtectedRoute>
         }
       />
+      <Route
+        path="*"
+        element={<ErrorBoundaryWithRouter />}
+      />
     </Route>
   ),
   {
@@ -223,9 +237,11 @@ function App() {
     <ErrorBoundary>
       <ThemeProvider>
         <AuthProvider>
-          <FamilyProvider>
-            <RouterProvider router={router} />
-          </FamilyProvider>
+          <FeedbackProvider>
+            <FamilyProvider>
+              <RouterProvider router={router} />
+            </FamilyProvider>
+          </FeedbackProvider>
         </AuthProvider>
       </ThemeProvider>
     </ErrorBoundary>
