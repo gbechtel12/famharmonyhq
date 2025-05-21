@@ -36,7 +36,6 @@ export const familyService = {
 
   async addMemberToFamily(familyId, userId) {
     try {
-      console.log(`Adding user ${userId} to family ${familyId}`);
       
       // First check if the family exists
       const familyRef = doc(db, 'families', familyId);
@@ -50,10 +49,8 @@ export const familyService = {
       // Check if user is already in the members array to avoid duplicates
       const familyData = familyDoc.data();
       if (familyData.members && familyData.members.includes(userId)) {
-        console.log(`User ${userId} is already a member of family ${familyId}`);
       } else {
         // Add the user to the members array
-        console.log(`Updating family ${familyId} to add member ${userId}`);
         await updateDoc(familyRef, {
           members: arrayUnion(userId),
           updatedAt: serverTimestamp()
@@ -63,7 +60,6 @@ export const familyService = {
       // Ensure the user has a document in the members collection
       await this.ensureMemberInCollection(familyId, userId);
       
-      console.log(`Successfully added user ${userId} to family ${familyId}`);
       return true;
     } catch (error) {
       console.error(`Error adding member ${userId} to family ${familyId}:`, error);
@@ -123,7 +119,6 @@ export const familyService = {
       
       await setDoc(inviteRef, inviteData);
       
-      console.log('Created invite with direct path:', inviteCode);
       return {
         id: inviteCode,
         code: inviteCode,
@@ -159,7 +154,6 @@ export const familyService = {
       
       if (directInviteDoc.exists()) {
         const inviteData = directInviteDoc.data();
-        console.log('Found invite by direct lookup:', code);
         return { id: directInviteDoc.id, ...inviteData, collection: 'invites' };
       }
       
@@ -170,7 +164,6 @@ export const familyService = {
       
       if (!querySnapshot.empty) {
         const invite = querySnapshot.docs[0];
-        console.log('Found invite by code field in invites collection:', code);
         return { id: invite.id, ...invite.data(), collection: 'invites' };
       }
       
@@ -181,7 +174,6 @@ export const familyService = {
       
       if (!familyQuerySnapshot.empty) {
         const invite = familyQuerySnapshot.docs[0];
-        console.log('Found invite by code field in familyInvites collection:', code);
         return { id: invite.id, ...invite.data(), collection: 'familyInvites' };
       }
       
@@ -219,7 +211,6 @@ export const familyService = {
 
   async acceptInvite(inviteCodeOrId, userId, userName = null) {
     try {
-      console.log(`User ${userId} attempting to accept invite with code: ${inviteCodeOrId}`);
       
       // Try to find the invite
       let invite;
@@ -227,7 +218,6 @@ export const familyService = {
       try {
         // First, try to find by code
         invite = await this.findInviteByCode(inviteCodeOrId);
-        console.log('Found invite:', invite);
       } catch (err) {
         console.error('Error finding invite by code:', err);
         throw new Error('Invalid code');
@@ -248,9 +238,6 @@ export const familyService = {
         }
       }
 
-      // Important: First add the user's UID to the family members array
-      // This establishes the relationship needed for subsequent operations
-      console.log(`Adding user ${userId} to family members array for family ${invite.familyId}`);
       await this.addMemberToFamily(invite.familyId, userId);
       
       // Update user document with family ID and other info
@@ -265,14 +252,12 @@ export const familyService = {
         userData.displayName = userName;
       }
       
-      console.log(`Updating user profile for ${userId} with family data:`, userData);
       await userService.updateUserProfile(userId, userData);
       
       // Mark the invite as accepted
       const collectionPath = invite.collection || 'invites';
       const inviteRef = doc(db, collectionPath, invite.id);
       
-      console.log(`Marking invite ${invite.id} as accepted by user ${userId}`);
       const updateData = { 
         status: 'accepted',
         acceptedBy: userId,
@@ -281,7 +266,6 @@ export const familyService = {
       
       await updateDoc(inviteRef, updateData);
 
-      console.log(`User ${userId} successfully joined family ${invite.familyId} with invite code ${inviteCodeOrId}`);
       return invite.familyId;
     } catch (error) {
       console.error('Error accepting invite:', error);
@@ -331,7 +315,6 @@ export const familyService = {
     }
 
     try {
-      console.log('Getting all family members for family:', familyId);
       
       // Get members from the members collection (including children)
       const familyMembers = await this.getFamilyMembers(familyId);
@@ -380,7 +363,6 @@ export const familyService = {
         a.name.localeCompare(b.name)
       );
       
-      console.log(`Successfully retrieved ${allMembers.length} family members (${adultMembers.length} adults, ${childMembers.length + additionalChildren.length} children)`);
       
       return allMembers;
     } catch (error) {
@@ -396,7 +378,6 @@ export const familyService = {
     }
 
     try {
-      console.log('Getting family members for family:', familyId);
       
       // Try to get members from the members subcollection directly
       const membersRef = collection(db, 'families', familyId, 'members');
@@ -453,7 +434,6 @@ export const familyService = {
       // Combine both sets of members
       const allMembers = [...membersFromCollection, ...uniqueAdultMembers];
       
-      console.log(`Found ${allMembers.length} family members`);
       
       return allMembers;
     } catch (error) {
@@ -478,7 +458,6 @@ export const familyService = {
       };
       
       const docRef = await addDoc(membersRef, childDoc);
-      console.log(`Added child ${childData.name} to family ${familyId}`);
       return { id: docRef.id, ...childDoc };
     } catch (error) {
       console.error('Error adding child to family:', error);
@@ -493,7 +472,6 @@ export const familyService = {
     }
 
     try {
-      console.log(`Ensuring user ${userId} exists in family ${familyId} members collection`);
       
       // First, check if member document already exists in the members collection
       const memberDocRef = doc(db, 'families', familyId, 'members', userId);
@@ -501,7 +479,6 @@ export const familyService = {
       
       // If member document doesn't exist, create it
       if (!memberDoc.exists()) {
-        console.log(`User ${userId} not found in members collection. Creating member document.`);
         
         // Get user profile to populate member document
         let userProfile = userData;
@@ -529,7 +506,6 @@ export const familyService = {
         
         // Set the member document with the user's ID as the document ID
         await setDoc(memberDocRef, memberData);
-        console.log(`Created member document for ${userId} in family ${familyId}`);
         
         // If this is a new member, ensure they have the correct role in their user profile
         if (!userProfile.role || userProfile.role !== memberData.role) {
@@ -537,13 +513,11 @@ export const familyService = {
             role: memberData.role,
             updatedAt: new Date().toISOString()
           });
-          console.log(`Updated user ${userId} profile with role: ${memberData.role}`);
         }
         
         return memberData;
       }
       
-      console.log(`User ${userId} already exists in members collection`);
       return { id: userId, ...memberDoc.data() };
     } catch (error) {
       console.error(`Error ensuring member ${userId} in collection:`, error);
@@ -557,7 +531,6 @@ export const familyService = {
     }
 
     try {
-      console.log(`Updating member ${userId} role to ${newRole} in family ${familyId}`);
       
       // Update the member document
       const memberDocRef = doc(db, 'families', familyId, 'members', userId);
@@ -583,7 +556,6 @@ export const familyService = {
         updatedAt: new Date().toISOString()
       });
       
-      console.log(`Successfully updated member ${userId} role to ${newRole}`);
       return true;
     } catch (error) {
       console.error(`Error updating member ${userId} role:`, error);
@@ -598,7 +570,6 @@ export const familyService = {
     }
 
     try {
-      console.log(`Setting up realtime listeners for family ${familyId} members`);
       
       // Set up listener for members subcollection
       const membersRef = collection(db, 'families', familyId, 'members');
@@ -696,7 +667,6 @@ export const familyService = {
               
               // First check if this child already exists in the members collection by ID
               if (membersById.has(doc.id)) {
-                console.log(`Child ${childData.name} already exists in members collection with ID ${doc.id}, skipping subUsers entry`);
                 return;
               }
               
@@ -705,7 +675,6 @@ export const familyService = {
                 const key = `${childData.name.toLowerCase()}_${childData.birthYear}`;
                 if (childrenByNameAndYear.has(key)) {
                   const existingId = childrenByNameAndYear.get(key);
-                  console.log(`Child ${childData.name} (${childData.birthYear}) already exists with ID ${existingId}, skipping subUsers entry ${doc.id}`);
                   return;
                 }
               }
@@ -738,7 +707,6 @@ export const familyService = {
               return (a.name || '').localeCompare(b.name || '');
             });
           
-          console.log(`Returning ${dedupedMembers.length} deduplicated family members`);
           callback(dedupedMembers);
         } catch (err) {
           console.error('Error in realtime members listener:', err);
@@ -762,7 +730,6 @@ export const familyService = {
     }
 
     try {
-      console.log(`Deleting member ${memberId} from family ${familyId}`);
       
       // First get the member to check if it's a child
       const memberRef = doc(db, 'families', familyId, 'members', memberId);
@@ -770,14 +737,12 @@ export const familyService = {
       
       // Check if this is a members collection document
       if (memberDoc.exists()) {
-        console.log(`Found member document for ${memberId} in members collection:`, memberDoc.data());
         
         const memberData = memberDoc.data();
         const isChild = memberData.type === 'child' || memberData.role === 'child';
         
         // Delete the member document from the members collection
         await deleteDoc(memberRef);
-        console.log(`Deleted member document for ${memberId} from members collection`);
         
         // If it's a child, also check if there's an entry in the subUsers collection
         if (isChild) {
@@ -787,7 +752,6 @@ export const familyService = {
             
             if (subUserDoc.exists()) {
               await deleteDoc(subUserRef);
-              console.log(`Deleted subUser document for child ${memberId}`);
             }
           } catch (err) {
             console.warn(`Error checking/deleting subUser for ${memberId}:`, err);
@@ -802,7 +766,6 @@ export const familyService = {
             members: arrayRemove(memberData.uid),
             updatedAt: serverTimestamp()
           });
-          console.log(`Removed user ${memberData.uid} from family members array`);
           
           // Also update the user's profile to remove familyId if they're a real user
           try {
@@ -812,7 +775,6 @@ export const familyService = {
                 familyId: null,
                 updatedAt: new Date().toISOString()
               });
-              console.log(`Updated user profile to remove familyId for ${memberData.uid}`);
             }
           } catch (err) {
             console.warn(`Error updating user profile for ${memberData.uid}:`, err);
@@ -824,15 +786,12 @@ export const familyService = {
       } 
       
       // If member wasn't found in members collection, check if it's in the subUsers collection
-      console.log(`Member ${memberId} not found in members collection, checking subUsers`);
       const subUserRef = doc(db, 'families', familyId, 'subUsers', memberId);
       const subUserDoc = await getDoc(subUserRef);
       
       if (subUserDoc.exists()) {
-        console.log(`Found subUser document for ${memberId}:`, subUserDoc.data());
         // Delete from subUsers collection
         await deleteDoc(subUserRef);
-        console.log(`Deleted subUser document for ${memberId}`);
         return true;
       }
       
@@ -851,7 +810,6 @@ export const familyService = {
     }
 
     try {
-      console.log(`Synchronizing all users with familyId ${familyId} to members collection`);
       
       // Get the family document to check the current members array
       const familyDoc = await this.getFamilyById(familyId);
@@ -863,13 +821,11 @@ export const familyService = {
       let usersToProcess = [];
       try {
         usersToProcess = await userService.getUsersWithFamilyId(familyId);
-        console.log(`Found ${usersToProcess.length} users with familyId ${familyId}`);
       } catch (err) {
         console.warn(`Error getting all users with familyId ${familyId}, using family.members array as fallback:`, err);
         
         // Fallback: Use the members array from the family document
         if (familyDoc.members && Array.isArray(familyDoc.members) && familyDoc.members.length > 0) {
-          console.log(`Using family.members array with ${familyDoc.members.length} entries as fallback`);
           
           // Get user profiles from the members array
           const memberProfiles = await Promise.all(
@@ -885,7 +841,6 @@ export const familyService = {
           
           // Filter out nulls and add to users to process
           usersToProcess = memberProfiles.filter(Boolean);
-          console.log(`Found ${usersToProcess.length} valid users from members array`);
         }
       }
       
@@ -900,7 +855,6 @@ export const familyService = {
         
         // Also make sure they're in the members array of the family document
         if (!familyDoc.members || !familyDoc.members.includes(user.id)) {
-          console.log(`Adding user ${user.id} to family members array`);
           await this.addMemberToFamily(familyId, user.id);
         }
       }
@@ -918,7 +872,6 @@ export const familyService = {
     }
 
     try {
-      console.log(`Manually adding member to family ${familyId}:`, userData);
       
       // 1. Create a member document in the members subcollection
       const membersRef = collection(db, 'families', familyId, 'members');
@@ -939,11 +892,9 @@ export const familyService = {
       if (userData.id) {
         memberDocRef = doc(membersRef, userData.id);
         await setDoc(memberDocRef, memberData);
-        console.log(`Added member ${userData.id} to members collection using provided ID`);
       } else {
         const docRef = await addDoc(membersRef, memberData);
         memberDocRef = docRef;
-        console.log(`Added member to members collection with new ID: ${docRef.id}`);
       }
       
       // 2. If we have a userId, also make sure it's in the family's members array
@@ -953,7 +904,6 @@ export const familyService = {
           members: arrayUnion(userData.id),
           updatedAt: serverTimestamp()
         });
-        console.log(`Added user ${userData.id} to family members array`);
       }
       
       return true;

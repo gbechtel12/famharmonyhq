@@ -98,8 +98,6 @@ function GroceryListPage() {
     if (!newItemName.trim()) return;
 
     try {
-      console.log('Adding item to grocery list:', newItemName, newItemCategory);
-      console.log('Family ID:', user.familyId);
       
       const newItem = {
         name: newItemName.trim(),

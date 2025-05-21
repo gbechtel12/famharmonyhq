@@ -51,7 +51,6 @@ export const groceryService = {
     }
     
     try {
-      console.log(`Adding grocery item "${item.name}" to family ${familyId}`);
       
       const groceryListRef = doc(db, 'families', familyId, 'groceryLists', 'current');
       const groceryListSnap = await getDoc(groceryListRef);
@@ -66,7 +65,6 @@ export const groceryService = {
       };
       
       if (groceryListSnap.exists()) {
-        console.log('Existing grocery list found, adding item');
         // We can't use arrayUnion with complex objects due to Firestore limitations
         // Instead, get the current items and add the new one
         const currentItems = groceryListSnap.data().items || [];
@@ -75,7 +73,6 @@ export const groceryService = {
           updatedAt: Timestamp.now()
         });
       } else {
-        console.log('No grocery list found, creating a new one');
         await setDoc(groceryListRef, {
           items: [newItem],
           createdAt: Timestamp.now(),
@@ -83,7 +80,6 @@ export const groceryService = {
         });
       }
       
-      console.log('Successfully added grocery item');
       return newItem;
     } catch (error) {
       console.error('Error adding grocery item:', error);

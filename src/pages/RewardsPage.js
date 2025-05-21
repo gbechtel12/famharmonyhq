@@ -123,16 +123,14 @@ function RewardsPage() {
     try {
       if (selectedReward) {
         // Update existing reward
-        await rewardsService.updateReward(selectedReward.id, {
-          ...formData,
-          familyId: user.familyId
+        await rewardsService.updateReward(user.familyId, selectedReward.id, {
+          ...formData
         });
         setRewards(rewards.map(r => r.id === selectedReward.id ? { ...r, ...formData } : r));
       } else {
         // Create new reward
-        const newReward = await rewardsService.createReward({
+        const newReward = await rewardsService.createReward(user.familyId, {
           ...formData,
-          familyId: user.familyId,
           createdBy: user.uid
         });
         setRewards([...rewards, newReward]);
@@ -147,7 +145,7 @@ function RewardsPage() {
   const handleDeleteReward = async (rewardId) => {
     if (window.confirm('Are you sure you want to delete this reward?')) {
       try {
-        await rewardsService.deleteReward(rewardId);
+        await rewardsService.deleteReward(user.familyId, rewardId);
         setRewards(rewards.filter(r => r.id !== rewardId));
       } catch (err) {
         console.error('Error deleting reward:', err);

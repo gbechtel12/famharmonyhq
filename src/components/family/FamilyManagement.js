@@ -189,7 +189,6 @@ export default function FamilyManagement() {
     setMemberToDelete(member);
     setConfirmDeleteOpen(true);
     // Log the member being selected for deletion
-    console.log('Selected member for deletion:', member);
   };
 
   const handleCancelDelete = () => {
@@ -204,12 +203,10 @@ export default function FamilyManagement() {
     setIsSubmitting(true);
     
     try {
-      console.log('Attempting to delete family member:', memberToDelete);
       
       // Check if the member is from subUsers collection (old format)
       if (memberToDelete.type === 'child' && !memberToDelete.uid) {
         const result = await deleteFamilyMember(memberToDelete.id);
-        console.log('Delete result:', result);
         
         if (result) {
           setSuccessMessage(`Successfully deleted ${memberToDelete.name || 'family member'}`);
@@ -221,7 +218,6 @@ export default function FamilyManagement() {
       } else {
         // Standard deletion flow
         const result = await deleteFamilyMember(memberToDelete.id);
-        console.log('Delete result:', result);
         
         if (result) {
           setSuccessMessage(`Successfully deleted ${memberToDelete.name || 'family member'}`);
@@ -263,11 +259,6 @@ export default function FamilyManagement() {
     setLocalError('');
     
     try {
-      // Resend invitation email using same code
-      // This is a fake implementation - you'll need to add actual email sending functionality
-      console.log(`Would resend invite with code ${code} to ${email}`);
-      
-      // For now, just copy the code to clipboard for manual sharing
       await navigator.clipboard.writeText(code);
       
       setSuccessMessage(`Invite code ${code} copied to clipboard for ${email}. Please share this code with them directly.`);
@@ -286,7 +277,6 @@ export default function FamilyManagement() {
     setSuccessMessage('');
     
     try {
-      console.log('Synchronizing family members...');
       await syncFamilyMembers();
       setSuccessMessage('Successfully synchronized all family members. Any missing members should now appear.');
     } catch (err) {
@@ -308,7 +298,6 @@ export default function FamilyManagement() {
     setSuccessMessage('');
     
     try {
-      console.log(`Manually syncing user with email: ${spouseEmail}`);
       
       // Get the family document to get the familyId
       const familyId = user.familyId;

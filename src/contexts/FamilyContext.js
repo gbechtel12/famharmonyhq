@@ -22,7 +22,6 @@ export function FamilyProvider({ children }) {
 
   const loadFamilyData = async () => {
     if (!user) {
-      console.log("No user available for loading family data");
       setFamily(null);
       setMembers([]);
       setLoading(false);
@@ -30,7 +29,6 @@ export function FamilyProvider({ children }) {
     }
 
     if (!user.familyId) {
-      console.log("User has no family ID, clearing family context state");
       setFamily(null);
       setMembers([]);
       setLoading(false);
@@ -38,7 +36,6 @@ export function FamilyProvider({ children }) {
     }
 
     try {
-      console.log("Loading family data for familyId:", user.familyId);
       setLoading(true);
       setError(null);
       
@@ -53,7 +50,6 @@ export function FamilyProvider({ children }) {
         return;
       }
       
-      console.log("Family data loaded successfully:", familyData?.id);
       setFamily(familyData);
       
       // Set up real-time listener for family members
@@ -82,7 +78,6 @@ export function FamilyProvider({ children }) {
     try {
       // Set up new listener
       const unsubscribe = familyService.getFamilyMembersRealtime(familyId, (familyMembers) => {
-        console.log("Family members updated in real-time:", familyMembers?.length || 0);
         setMembers(familyMembers || []);
         setLoading(false);
       });
@@ -174,7 +169,6 @@ export function FamilyProvider({ children }) {
       setLoading(true);
       setError(null);
       
-      console.log(`Attempting to join family with invite code: ${inviteCode}`);
       
       if (!inviteCode || typeof inviteCode !== 'string') {
         throw new Error('Please enter a valid invite code');
@@ -182,20 +176,17 @@ export function FamilyProvider({ children }) {
       
       // First try to find the invite to check if it's valid
       const familyId = await familyService.acceptInvite(inviteCode, user.uid, userName);
-      console.log(`Successfully joined family with ID: ${familyId}`);
       
       // Update the user context to include the new familyId
       user.familyId = familyId;
       
       // Reload family data
-      console.log(`Loading family data for newly joined family: ${familyId}`);
       const familyData = await familyService.getFamilyById(familyId);
       setFamily(familyData);
       
       // Set up real-time listener for family members
       setupMembersListener(familyId);
       
-      console.log(`Family join process completed successfully`);
       return familyId;
     } catch (err) {
       console.error('Error joining family:', err);
@@ -317,7 +308,6 @@ export function FamilyProvider({ children }) {
       setLoading(true);
       setError(null);
       
-      console.log(`Synchronizing family members for family: ${user.familyId}`);
       await familyService.syncFamilyMembers(user.familyId);
       
       // Reload members
@@ -341,8 +331,7 @@ export function FamilyProvider({ children }) {
     try {
       setLoading(true);
       setError(null);
-      
-      console.log(`Manually adding member to family: ${user.familyId}`);
+    
       await familyService.manuallyAddFamilyMember(user.familyId, userData);
       
       // Reload members

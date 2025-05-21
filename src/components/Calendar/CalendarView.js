@@ -140,7 +140,6 @@ export default function CalendarView({ familyId }) {
         
         // First try a simple getDocs to test permissions
         const snapshot = await getDocs(eventsRef);
-        console.log('Successfully queried events collection. Found:', snapshot.size, 'events');
         
         // Then set up the realtime listener
         unsubscribe = onSnapshot(eventsRef, 

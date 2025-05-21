@@ -42,7 +42,6 @@ function GroceryListCard({ fullScreen = false, isLoading = false }) {
     }
     
     setLoading(true);
-    console.log(`Fetching grocery list for family ${family.id}`);
     
     try {
       // Use the withErrorHandling utility for better error handling
@@ -55,7 +54,6 @@ function GroceryListCard({ fullScreen = false, isLoading = false }) {
         }
       );
       
-      console.log(`Loaded grocery list with ${groceryList.items?.length || 0} items`);
       setGroceryItems(groceryList.items || []);
       setError(null);
     } catch (err) {
@@ -70,7 +68,6 @@ function GroceryListCard({ fullScreen = false, isLoading = false }) {
   useEffect(() => {
     if (!family?.id) return;
     
-    console.log(`Loading grocery list for family ${family.id} (isLoading: ${isLoading})`);
     fetchGroceryList().catch(err => {
       console.error('Failed to fetch grocery list:', err);
     });

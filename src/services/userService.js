@@ -59,7 +59,6 @@ export const userService = {
   
   async getUsersWithFamilyId(familyId) {
     try {
-      console.log(`Fetching all users with familyId: ${familyId}`);
       const usersRef = collection(db, 'users');
       
       // First ensure we can read the users collection at all
@@ -69,7 +68,6 @@ export const userService = {
         const querySnapshot = await getDocs(q);
         
         if (querySnapshot.empty) {
-          console.log('No users found with this familyId');
           return [];
         }
         
@@ -78,21 +76,18 @@ export const userService = {
           ...doc.data()
         }));
         
-        console.log(`Found ${users.length} users with familyId ${familyId}`);
         return users;
       } catch (queryError) {
         console.error('Error querying users by familyId:', queryError);
         
         // Fallback: Try to get just the current user
         // This might be all we have permission for
-        console.log('Attempting to get current user as fallback');
         const auth = getAuth();
         const currentUser = auth.currentUser;
         
         if (currentUser) {
           const userDoc = await this.getUserProfile(currentUser.uid);
           if (userDoc && userDoc.familyId === familyId) {
-            console.log('Found current user with matching familyId');
             return [userDoc];
           }
         }

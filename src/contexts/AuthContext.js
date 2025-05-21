@@ -26,13 +26,11 @@ export function AuthProvider({ children }) {
     const handleUser = async (currentUser) => {
       if (currentUser) {
         try {
-          console.log("Auth state changed, user is logged in:", currentUser.uid);
           
           // Get or create user profile
           let userProfile = await userService.getUserProfile(currentUser.uid);
           
           if (!userProfile) {
-            console.log("Creating new user profile for:", currentUser.uid);
             // Create new user profile if it doesn't exist
             await userService.createUserProfile(currentUser.uid, {
               email: currentUser.email,
@@ -43,14 +41,10 @@ export function AuthProvider({ children }) {
             });
             userProfile = await userService.getUserProfile(currentUser.uid);
           }
-
-          console.log("User profile loaded:", userProfile?.id, 
-                      "FamilyId:", userProfile?.familyId || 'none');
           
           // If user has a familyId, ensure they have a corresponding member document
           if (userProfile?.familyId) {
             try {
-              console.log(`User has familyId ${userProfile.familyId}, ensuring member document exists`);
               await familyService.ensureMemberInCollection(
                 userProfile.familyId, 
                 currentUser.uid,
@@ -73,13 +67,11 @@ export function AuthProvider({ children }) {
           };
           
           setUser(userWithProfile);
-          console.log("Auth context user state updated with familyId:", userWithProfile.familyId);
         } catch (error) {
           console.error('Error setting up user profile:', error);
           setAuthError(error);
         }
       } else {
-        console.log("Auth state changed, user is logged out");
         setUser(null);
       }
       setLoading(false);

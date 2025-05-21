@@ -43,7 +43,6 @@ function ChoresCard({ fullScreen = false, isLoading = false }) {
     
     try {
       setLoading(true);
-      console.log('Fetching chores for dashboard...');
       
       // Fetch chores from Firestore
       const choresRef = collection(db, 'families', family.id, 'chores');
@@ -58,8 +57,6 @@ function ChoresCard({ fullScreen = false, isLoading = false }) {
         id: doc.id,
         ...doc.data()
       }));
-      
-      console.log(`Found ${allChores.length} total chores`);
       
       // Filter chores that are due today
       const todaysChores = allChores.filter(chore => {
@@ -93,16 +90,6 @@ function ChoresCard({ fullScreen = false, isLoading = false }) {
         return true;
       });
       
-      console.log(`Found ${todaysChores.length} chores for today`);
-      // Log details about assigned chores
-      todaysChores.forEach(chore => {
-        if (chore.assignedTo) {
-          console.log(`Chore "${chore.title || chore.name}" assigned to:`, chore.assignedTo);
-        } else {
-          console.log(`Chore "${chore.title || chore.name}" is unassigned`);
-        }
-      });
-      
       setChores(todaysChores);
       setError(null);
       setLoading(false);
@@ -118,7 +105,6 @@ function ChoresCard({ fullScreen = false, isLoading = false }) {
   useEffect(() => {
     if (!family?.id) return;
     
-    console.log(`Loading chores for family ${family.id} (isLoading: ${isLoading})`);
     fetchChores().catch(err => {
       console.error('Error in fetchChores:', err);
       setError('Failed to load chores. Please try again.');

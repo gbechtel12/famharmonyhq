@@ -77,13 +77,10 @@ function ChoresPage() {
 
   const handleChange = useCallback((e) => {
     const { name, value } = e.target;
-    console.log(`Field ${name} changed to:`, value);
     
     // Special handling for assignedTo
     if (name === 'assignedTo') {
-      console.log('Assigning to family member with ID:', value);
       const member = members.find(m => m.id === value);
-      console.log('Selected family member:', member);
     }
     
     setFormData(prev => ({
@@ -105,7 +102,6 @@ function ChoresPage() {
       let assignedMember = null;
       if (formData.assignedTo) {
         assignedMember = members.find(m => m.id === formData.assignedTo);
-        console.log('Found assigned member:', assignedMember);
       }
       
       const choreData = {
@@ -229,9 +225,6 @@ function ChoresPage() {
 
   const handleEditChore = (chore) => {
     setSelectedChore(chore);
-    console.log('Editing chore:', chore);
-    console.log('Chore assignedTo:', chore.assignedTo);
-    console.log('Available family members:', members);
     
     setFormData({
       title: chore.title || '',
@@ -278,7 +271,6 @@ function ChoresPage() {
 
       try {
         setLoading(true);
-        console.log('Fetching chores with familyId:', user.familyId);
         
         // Set up real-time listener for chores
         const choresRef = collection(db, 'families', user.familyId, 'chores');
@@ -287,7 +279,6 @@ function ChoresPage() {
             id: doc.id,
             ...doc.data()
           }));
-          console.log('Chores loaded successfully:', choreData?.length);
           setChores(choreData);
           setLoading(false);
         }, (err) => {
