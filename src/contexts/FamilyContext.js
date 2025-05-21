@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { useAuth } from './AuthContext';
 import { familyService } from '../services/familyService';
+import { userService } from '../services/userService';
 
 const FamilyContext = createContext();
 
@@ -14,6 +15,10 @@ export function FamilyProvider({ children }) {
   const [members, setMembers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [successMessage, setSuccessMessage] = useState(null);
+  
+  // Reference to the members unsubscribe function for cleanup
+  const membersUnsubscribeRef = React.useRef(null);
 
   const loadFamilyData = async () => {
     if (!user) {
@@ -51,24 +56,79 @@ export function FamilyProvider({ children }) {
       console.log("Family data loaded successfully:", familyData?.id);
       setFamily(familyData);
       
-      // Load family members
-      console.log("Loading family members for familyId:", user.familyId);
-      const familyMembers = await familyService.getAllFamilyMembers(user.familyId);
-      console.log("Family members loaded successfully:", familyMembers?.length || 0);
-      setMembers(familyMembers || []);
+      // Set up real-time listener for family members
+      setupMembersListener(user.familyId);
     } catch (err) {
       console.error('Error loading family data:', err);
       setError(err.message);
-    } finally {
       setLoading(false);
     }
   };
+  
+  // Setup real-time listener for family members
+  const setupMembersListener = (familyId) => {
+    // Clean up previous listener if it exists
+    if (membersUnsubscribeRef.current && typeof membersUnsubscribeRef.current === 'function') {
+      try {
+        membersUnsubscribeRef.current();
+      } catch (e) {
+        console.error('Error unsubscribing from previous listener:', e);
+      }
+      membersUnsubscribeRef.current = null;
+    }
+    
+    if (!familyId) return;
+    
+    try {
+      // Set up new listener
+      const unsubscribe = familyService.getFamilyMembersRealtime(familyId, (familyMembers) => {
+        console.log("Family members updated in real-time:", familyMembers?.length || 0);
+        setMembers(familyMembers || []);
+        setLoading(false);
+      });
+      
+      // Store the unsubscribe function for cleanup
+      if (unsubscribe && typeof unsubscribe === 'function') {
+        membersUnsubscribeRef.current = unsubscribe;
+      }
+    } catch (err) {
+      console.error('Error setting up real-time members listener:', err);
+      setError(err.message);
+      setLoading(false);
+    }
+  };
+  
+  // Clean up listeners on unmount or family ID change
+  useEffect(() => {
+    return () => {
+      if (membersUnsubscribeRef.current && typeof membersUnsubscribeRef.current === 'function') {
+        try {
+          membersUnsubscribeRef.current();
+        } catch (e) {
+          console.error('Error unsubscribing in cleanup:', e);
+        }
+        membersUnsubscribeRef.current = null;
+      }
+    };
+  }, []);
 
   useEffect(() => {
     loadFamilyData();
+    
+    // Clean up on familyId change
+    return () => {
+      if (membersUnsubscribeRef.current && typeof membersUnsubscribeRef.current === 'function') {
+        try {
+          membersUnsubscribeRef.current();
+        } catch (e) {
+          console.error('Error unsubscribing in user change cleanup:', e);
+        }
+        membersUnsubscribeRef.current = null;
+      }
+    };
   }, [user]);
 
-  // Refresh family members
+  // Refresh family members manually if needed
   const reloadMembers = async () => {
     if (!user?.familyId) return;
     
@@ -94,7 +154,7 @@ export function FamilyProvider({ children }) {
     try {
       setLoading(true);
       const familyId = await familyService.createFamily(user.uid, familyName);
-      await familyService.updateUserProfile(user.uid, { familyId });
+      await userService.updateUserProfile(user.uid, { familyId });
       
       // Reload family data
       const familyData = await familyService.getFamilyById(familyId);
@@ -132,9 +192,8 @@ export function FamilyProvider({ children }) {
       const familyData = await familyService.getFamilyById(familyId);
       setFamily(familyData);
       
-      // Also load the members to update the UI
-      const familyMembers = await familyService.getAllFamilyMembers(familyId);
-      setMembers(familyMembers || []);
+      // Set up real-time listener for family members
+      setupMembersListener(familyId);
       
       console.log(`Family join process completed successfully`);
       return familyId;
@@ -151,10 +210,20 @@ export function FamilyProvider({ children }) {
     try {
       setLoading(true);
       await familyService.removeMemberFromFamily(user.familyId, user.uid);
-      await familyService.updateUserProfile(user.uid, { familyId: null });
+      await userService.updateUserProfile(user.uid, { familyId: null });
       
       setFamily(null);
       setMembers([]);
+      
+      // Clean up real-time listener
+      if (membersUnsubscribeRef.current && typeof membersUnsubscribeRef.current === 'function') {
+        try {
+          membersUnsubscribeRef.current();
+        } catch (e) {
+          console.error('Error unsubscribing in leave family:', e);
+        }
+        membersUnsubscribeRef.current = null;
+      }
     } catch (err) {
       setError(err.message);
       throw err;
@@ -173,6 +242,122 @@ export function FamilyProvider({ children }) {
       throw err;
     }
   };
+  
+  // Update a member's role
+  const updateMemberRole = async (memberId, newRole) => {
+    if (!user?.familyId || !memberId || !newRole) {
+      throw new Error('Missing required parameters');
+    }
+    
+    try {
+      setLoading(true);
+      setError(null);
+      
+      await familyService.updateMemberRole(user.familyId, memberId, newRole);
+      
+      // No need to manually reload members since we have a real-time listener
+      
+      return true;
+    } catch (err) {
+      console.error('Error updating member role:', err);
+      setError(err.message);
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  };
+  
+  // Delete a family member
+  const deleteFamilyMember = async (memberId) => {
+    if (!user?.familyId || !memberId) {
+      throw new Error('Missing required parameters');
+    }
+    
+    try {
+      setLoading(true);
+      setError(null);
+      
+      const result = await familyService.deleteFamilyMember(user.familyId, memberId);
+      
+      // No need to manually reload members since we have a real-time listener
+      
+      return result;
+    } catch (err) {
+      console.error('Error deleting family member:', err);
+      setError(err.message);
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  };
+  
+  // Get filtered members list
+  const getFilteredMembers = (filter) => {
+    if (!members || members.length === 0) return [];
+    
+    if (!filter) return members;
+    
+    // Filter members by type, role, etc.
+    if (filter.role) {
+      return members.filter(member => member.role === filter.role);
+    }
+    
+    if (filter.type) {
+      return members.filter(member => member.type === filter.type);
+    }
+    
+    return members;
+  };
+
+  // Synchronize all users with this familyId to ensure they appear in the members list
+  const syncFamilyMembers = async () => {
+    if (!user?.familyId) return;
+    
+    try {
+      setLoading(true);
+      setError(null);
+      
+      console.log(`Synchronizing family members for family: ${user.familyId}`);
+      await familyService.syncFamilyMembers(user.familyId);
+      
+      // Reload members
+      await reloadMembers();
+      
+      setSuccessMessage('Family members synchronized successfully');
+      return true;
+    } catch (err) {
+      console.error('Error synchronizing family members:', err);
+      setError(err.message);
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Manually add a member
+  const manuallyAddMember = async (userData) => {
+    if (!user?.familyId) return;
+    
+    try {
+      setLoading(true);
+      setError(null);
+      
+      console.log(`Manually adding member to family: ${user.familyId}`);
+      await familyService.manuallyAddFamilyMember(user.familyId, userData);
+      
+      // Reload members
+      await reloadMembers();
+      
+      setSuccessMessage('Family member manually added successfully');
+      return true;
+    } catch (err) {
+      console.error('Error manually adding family member:', err);
+      setError(err.message);
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const value = {
     family,
@@ -183,7 +368,12 @@ export function FamilyProvider({ children }) {
     joinFamily,
     leaveFamily,
     createFamilyInvite,
-    reloadMembers
+    reloadMembers,
+    updateMemberRole,
+    deleteFamilyMember,
+    getFilteredMembers,
+    syncFamilyMembers,
+    manuallyAddMember
   };
 
   return (

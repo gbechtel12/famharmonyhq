@@ -28,13 +28,16 @@ service cloud.firestore {
     // User profiles
     match /users/{userId} {
       allow read: if isAuthenticated() && 
-                 (request.auth.uid == userId || 
-                  (exists(/databases/$(database)/documents/users/$(userId)) &&
-                   exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-                   get(/databases/$(database)/documents/users/$(userId)).data.familyId != null &&
-                   get(/databases/$(database)/documents/users/$(request.auth.uid)).data.familyId != null &&
-                   get(/databases/$(database)/documents/users/$(userId)).data.familyId == 
-                   get(/databases/$(database)/documents/users/$(request.auth.uid)).data.familyId));
+                 (
+                   request.auth.uid == userId || 
+                   (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+                   get(/databases/$(database)/documents/users/$(request.auth.uid)).data.familyId != null)
+                 );
+      
+      // Allow listing users with the same familyId as the requesting user
+      allow list: if isAuthenticated() &&
+                 exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+                 get(/databases/$(database)/documents/users/$(request.auth.uid)).data.familyId != null;
       
       allow create: if isAuthenticated() && request.auth.uid == userId;
       allow update: if isAuthenticated() && request.auth.uid == userId;
@@ -129,10 +132,9 @@ service cloud.firestore {
 
       // Family rewards
       match /rewards/{rewardId} {
-        allow read: if isAuthenticated() && 
-                   (resource == null || isFamilyMember(familyId) || hasFamilyId(familyId));
+        allow read: if isAuthenticated();
         allow write: if isAuthenticated() && 
-                    (resource == null || isFamilyMember(familyId) || hasFamilyId(familyId));
+                    (resource == null || isFamilyMember(resource.data.familyId) || hasFamilyId(resource.data.familyId));
       }
       
       // Family redemptions
@@ -145,10 +147,9 @@ service cloud.firestore {
       
       // Family chores
       match /chores/{choreId} {
-        allow read: if isAuthenticated() && 
-                   (resource == null || isFamilyMember(familyId) || hasFamilyId(familyId));
+        allow read: if isAuthenticated();
         allow write: if isAuthenticated() && 
-                    (resource == null || isFamilyMember(familyId) || hasFamilyId(familyId));
+                    (resource == null || isFamilyMember(resource.data.familyId) || hasFamilyId(resource.data.familyId));
       }
       
       // Family events
@@ -261,22 +262,16 @@ service cloud.firestore {
 
     // Legacy rewards store rules
     match /rewards/{rewardId} {
-      allow read: if isAuthenticated() && 
-                 (resource == null || isFamilyMember(resource.data.familyId) ||
-                  hasFamilyId(resource.data.familyId));
+      allow read: if isAuthenticated();
       allow write: if isAuthenticated() && 
-                  (resource == null || isFamilyMember(resource.data.familyId) ||
-                   hasFamilyId(resource.data.familyId));
+                  (resource == null || isFamilyMember(resource.data.familyId) || hasFamilyId(resource.data.familyId));
     }
 
     // Legacy redemption history rules
     match /redemptions/{redemptionId} {
-      allow read: if isAuthenticated() && 
-                 (resource == null || isFamilyMember(resource.data.familyId) ||
-                  hasFamilyId(resource.data.familyId));
+      allow read: if isAuthenticated();
       allow write: if isAuthenticated() && 
-                  (resource == null || isFamilyMember(resource.data.familyId) ||
-                   hasFamilyId(resource.data.familyId));
+                  (resource == null || isFamilyMember(resource.data.familyId) || hasFamilyId(resource.data.familyId));
     }
   }
 } 

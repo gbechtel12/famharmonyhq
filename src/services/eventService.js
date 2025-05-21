@@ -34,7 +34,10 @@ export const eventService = {
             startTime: event.startTime ? Timestamp.fromDate(new Date(event.startTime)) : Timestamp.fromDate(new Date(event.start)),
             endTime: event.endTime ? Timestamp.fromDate(new Date(event.endTime)) : Timestamp.fromDate(new Date(event.end)),
             createdAt: Timestamp.now(),
-            category: event.category || 'personal'
+            category: event.category || 'personal',
+            // Store participants data properly
+            participants: event.participants || [],
+            participantsData: event.participantsData || []
           };
           batch.set(newEventRef, newEvent);
         });
@@ -52,7 +55,10 @@ export const eventService = {
         startTime: eventData.startTime ? Timestamp.fromDate(new Date(eventData.startTime)) : Timestamp.fromDate(new Date(eventData.start)),
         endTime: eventData.endTime ? Timestamp.fromDate(new Date(eventData.endTime)) : Timestamp.fromDate(new Date(eventData.end)),
         createdAt: Timestamp.now(),
-        category: eventData.category || 'personal'
+        category: eventData.category || 'personal',
+        // Store participants data properly
+        participants: eventData.participants || [],
+        participantsData: eventData.participantsData || []
       };
       const docRef = await addDoc(eventsRef, newEvent);
       return { id: docRef.id, ...newEvent };
@@ -76,7 +82,9 @@ export const eventService = {
         id: doc.id,
         ...doc.data(),
         start: doc.data().start.toDate(),
-        end: doc.data().end.toDate()
+        end: doc.data().end.toDate(),
+        startTime: doc.data().startTime ? doc.data().startTime.toDate() : doc.data().start.toDate(),
+        endTime: doc.data().endTime ? doc.data().endTime.toDate() : doc.data().end.toDate()
       }));
     } catch (error) {
       console.error('Error fetching events:', error);
@@ -115,6 +123,15 @@ export const eventService = {
         updates.endTime = Timestamp.fromDate(new Date(updateData.endTime));
         updates.end = Timestamp.fromDate(new Date(updateData.endTime));
       }
+      
+      // Handle participants data
+      if (updateData.participants) {
+        updates.participants = updateData.participants;
+      }
+      if (updateData.participantsData) {
+        updates.participantsData = updateData.participantsData;
+      }
+      
       await updateDoc(eventRef, updates);
       return { id: eventId, ...updates };
     } catch (error) {
@@ -132,7 +149,7 @@ export const eventService = {
     try {
       const eventRef = doc(db, 'families', familyId, 'events', eventId);
       await deleteDoc(eventRef);
-      return eventId;
+      return { success: true };
     } catch (error) {
       console.error('Error deleting event:', error);
       throw error;

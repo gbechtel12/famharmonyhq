@@ -60,7 +60,21 @@ function ChoreItem({ chore, onStatusChange, onEdit, onDelete, onToggleComplete }
     : 0;
   
   // Format the last updated timestamp if available
-  const lastUpdated = chore.updatedAt ? formatDistanceToNow(new Date(chore.updatedAt), { addSuffix: true }) : '';
+  const lastUpdated = chore.updatedAt 
+    ? (() => {
+        try {
+          const updatedDate = new Date(chore.updatedAt);
+          // Check if date is valid before formatting
+          if (!isNaN(updatedDate.getTime())) {
+            return formatDistanceToNow(updatedDate, { addSuffix: true });
+          }
+          return '';
+        } catch (err) {
+          console.warn('Invalid date format in chore:', chore.id, chore.updatedAt);
+          return '';
+        }
+      })()
+    : '';
   
   // Calculate the total stars earned from this chore
   const earnedStars = chore.earnedPoints || 0;

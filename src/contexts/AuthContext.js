@@ -9,6 +9,7 @@ import {
 } from 'firebase/auth';
 import { auth } from '../firebase';
 import { userService } from '../services/userService';
+import { familyService } from '../services/familyService';
 
 const AuthContext = createContext();
 
@@ -37,7 +38,8 @@ export function AuthProvider({ children }) {
               email: currentUser.email,
               displayName: currentUser.displayName || currentUser.email.split('@')[0],
               photoURL: currentUser.photoURL,
-              familyId: null // Initially no family
+              familyId: null, // Initially no family
+              role: 'member' // Default role
             });
             userProfile = await userService.getUserProfile(currentUser.uid);
           }
@@ -45,12 +47,28 @@ export function AuthProvider({ children }) {
           console.log("User profile loaded:", userProfile?.id, 
                       "FamilyId:", userProfile?.familyId || 'none');
           
+          // If user has a familyId, ensure they have a corresponding member document
+          if (userProfile?.familyId) {
+            try {
+              console.log(`User has familyId ${userProfile.familyId}, ensuring member document exists`);
+              await familyService.ensureMemberInCollection(
+                userProfile.familyId, 
+                currentUser.uid,
+                userProfile
+              );
+            } catch (memberError) {
+              console.error("Error ensuring member document:", memberError);
+              // Non-blocking error - we'll continue with auth
+            }
+          }
+          
           // Merge auth user with profile data
           const userWithProfile = {
             ...currentUser,
             familyId: userProfile?.familyId || null,
             displayName: userProfile?.displayName || currentUser.displayName || currentUser.email.split('@')[0],
             color: userProfile?.color || null,
+            role: userProfile?.role || 'member',
             // Add any other profile fields you need
           };
           

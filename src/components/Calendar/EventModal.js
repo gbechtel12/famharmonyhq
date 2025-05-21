@@ -15,9 +15,15 @@ import {
   Switch,
   FormControlLabel,
   useMediaQuery,
-  useTheme
+  useTheme,
+  Chip,
+  ListSubheader,
+  ListItemText,
+  Checkbox,
+  OutlinedInput
 } from '@mui/material';
 import { styled } from '@mui/material/styles';
+import { useFamily } from '../../contexts/FamilyContext';
 
 const ColorPreview = styled('div')(({ color }) => ({
   width: 20,
@@ -53,6 +59,7 @@ export default function EventModal({
 }) {
   const theme = useTheme();
   const fullScreen = useMediaQuery(theme.breakpoints.down('sm'));
+  const { members } = useFamily(); // Get family members from context
   
   const [formData, setFormData] = useState({
     title: '',
@@ -61,7 +68,8 @@ export default function EventModal({
     description: '',
     category: 'personal',
     recurrence: 'none',
-    notifications: false
+    notifications: false,
+    participants: [] // Array of participant IDs
   });
   const [error, setError] = useState('');
   const [conflicts, setConflicts] = useState([]);
@@ -76,7 +84,8 @@ export default function EventModal({
         description: event.description || '',
         category: event.category || 'personal',
         recurrence: event.recurrence || 'none',
-        notifications: event.notifications || false
+        notifications: event.notifications || false,
+        participants: event.participants || []
       });
     } else {
       setFormData({
@@ -86,7 +95,8 @@ export default function EventModal({
         description: '',
         category: 'personal',
         recurrence: 'none',
-        notifications: false
+        notifications: false,
+        participants: []
       });
     }
   }, [event]);
@@ -106,6 +116,11 @@ export default function EventModal({
       const conflicts = checkConflicts?.(value, name === 'start');
       setConflicts(conflicts || []);
     }
+  };
+
+  const handleParticipantsChange = (event) => {
+    const { value } = event.target;
+    setFormData(prev => ({ ...prev, participants: value }));
   };
 
   const handleSubmit = async (e) => {
@@ -130,7 +145,17 @@ export default function EventModal({
         ...formData,
         // Add these fields for compatibility with agenda system
         startTime: new Date(formData.start),
-        endTime: new Date(formData.end)
+        endTime: new Date(formData.end),
+        // Convert participant IDs to participant objects with name and type
+        participantsData: formData.participants.map(id => {
+          const member = members.find(m => m.id === id);
+          return member ? {
+            id: member.id,
+            name: member.name || member.displayName || 'Family Member',
+            type: member.type || 'adult',
+            color: member.color || null
+          } : { id }
+        })
       };
 
       // Handle recurring events
@@ -201,62 +226,63 @@ export default function EventModal({
   };
 
   return (
-    <Dialog 
-      open={open} 
-      onClose={() => !loading && onClose()} 
-      maxWidth="sm" 
-      fullWidth
-      fullScreen={fullScreen}
-    >
+    <Dialog open={open} onClose={onClose} fullScreen={fullScreen} maxWidth="sm" fullWidth>
       <DialogTitle>
         {event ? 'Edit Event' : 'Create New Event'}
       </DialogTitle>
       <DialogContent>
-        {error && (
-          <Alert severity="error" sx={{ mb: 2 }}>
-            {error}
-          </Alert>
-        )}
-        {conflicts.length > 0 && (
-          <Alert severity="warning" sx={{ mb: 2 }}>
-            Warning: This event overlaps with {conflicts.length} other event(s)
-          </Alert>
-        )}
-        <Box component="form" onSubmit={handleSubmit} sx={{ mt: 1 }}>
+        <Box component="form" onSubmit={handleSubmit} noValidate>
+          {error && (
+            <Alert severity="error" sx={{ mb: 2 }}>
+              {error}
+            </Alert>
+          )}
+          
+          {conflicts && conflicts.length > 0 && (
+            <Alert severity="warning" sx={{ mb: 2 }}>
+              Potential conflicts with {conflicts.length} other event(s)
+            </Alert>
+          )}
+          
           <TextField
+            autoFocus
+            margin="normal"
+            label="Event Title"
+            type="text"
             fullWidth
-            label="Title"
             name="title"
             value={formData.title}
             onChange={handleChange}
-            margin="normal"
             required
             disabled={loading}
           />
+          
           <TextField
-            fullWidth
-            label="Start"
-            name="start"
+            margin="normal"
+            label="Start Time"
             type="datetime-local"
+            fullWidth
+            name="start"
             value={formData.start}
             onChange={handleChange}
-            margin="normal"
+            InputLabelProps={{ shrink: true }}
             required
             disabled={loading}
-            InputLabelProps={{ shrink: true }}
           />
+          
           <TextField
-            fullWidth
-            label="End"
-            name="end"
+            margin="normal"
+            label="End Time"
             type="datetime-local"
+            fullWidth
+            name="end"
             value={formData.end}
             onChange={handleChange}
-            margin="normal"
+            InputLabelProps={{ shrink: true }}
             required
             disabled={loading}
-            InputLabelProps={{ shrink: true }}
           />
+          
           <FormControl fullWidth margin="normal">
             <InputLabel>Repeats</InputLabel>
             <Select
@@ -305,6 +331,62 @@ export default function EventModal({
               ))}
             </Select>
           </FormControl>
+          
+          <FormControl fullWidth margin="normal">
+            <InputLabel id="participants-label">Participants</InputLabel>
+            <Select
+              labelId="participants-label"
+              multiple
+              value={formData.participants}
+              onChange={handleParticipantsChange}
+              input={<OutlinedInput label="Participants" />}
+              disabled={loading}
+              renderValue={(selected) => (
+                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                  {selected.map((value) => {
+                    const member = members.find(m => m.id === value);
+                    return (
+                      <Chip 
+                        key={value} 
+                        label={member ? (member.name || member.displayName) : value} 
+                        color={member?.type === 'child' ? 'secondary' : 'primary'}
+                        variant="outlined"
+                        size="small"
+                      />
+                    );
+                  })}
+                </Box>
+              )}
+            >
+              {/* Group members by type */}
+              {members.some(m => m.type === 'adult') && (
+                <ListSubheader>Adults</ListSubheader>
+              )}
+              {members
+                .filter(m => m.type === 'adult')
+                .map(member => (
+                  <MenuItem key={member.id} value={member.id}>
+                    <Checkbox checked={formData.participants.indexOf(member.id) > -1} />
+                    <ListItemText primary={member.name || member.displayName || 'Family Member'} />
+                  </MenuItem>
+                ))
+              }
+              
+              {members.some(m => m.type === 'child') && (
+                <ListSubheader>Children</ListSubheader>
+              )}
+              {members
+                .filter(m => m.type === 'child')
+                .map(member => (
+                  <MenuItem key={member.id} value={member.id}>
+                    <Checkbox checked={formData.participants.indexOf(member.id) > -1} />
+                    <ListItemText primary={member.name || member.displayName || 'Family Member'} />
+                  </MenuItem>
+                ))
+              }
+            </Select>
+          </FormControl>
+          
           <TextField
             fullWidth
             label="Description"
@@ -318,35 +400,18 @@ export default function EventModal({
           />
         </Box>
       </DialogContent>
-      <DialogActions sx={{ p: 2, justifyContent: 'space-between' }}>
-        <Box>
-          {event && (
-            <Button 
-              onClick={handleDelete} 
-              color="error" 
-              disabled={loading}
-            >
-              Delete
-            </Button>
-          )}
-        </Box>
-        <Box>
-          <Button 
-            onClick={onClose} 
-            disabled={loading}
-            sx={{ mr: 1 }}
-          >
-            Cancel
+      <DialogActions>
+        {event && (
+          <Button onClick={handleDelete} color="error" disabled={loading}>
+            Delete
           </Button>
-          <Button 
-            onClick={handleSubmit} 
-            variant="contained"
-            color="primary"
-            disabled={loading}
-          >
-            {loading ? 'Saving...' : (event ? 'Update' : 'Create')}
-          </Button>
-        </Box>
+        )}
+        <Button onClick={onClose} disabled={loading}>
+          Cancel
+        </Button>
+        <Button onClick={handleSubmit} color="primary" variant="contained" disabled={loading}>
+          {loading ? 'Saving...' : 'Save'}
+        </Button>
       </DialogActions>
     </Dialog>
   );

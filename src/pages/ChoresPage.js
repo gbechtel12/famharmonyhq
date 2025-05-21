@@ -21,7 +21,8 @@ import {
   RadioGroup,
   Radio,
   InputAdornment,
-  Snackbar
+  Snackbar,
+  Grid
 } from '@mui/material';
 import {
   Add as AddIcon
@@ -43,9 +44,11 @@ import { useAuth } from '../contexts/AuthContext';
 import Loader from '../components/common/Loader';
 import { familyService } from '../services/familyService';
 import KanbanBoard from '../components/chores/KanbanBoard';
+import { useFamily } from '../contexts/FamilyContext';
 
 function ChoresPage() {
   const { user } = useAuth();
+  const { members } = useFamily();
   const [chores, setChores] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -53,7 +56,6 @@ function ChoresPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedChore, setSelectedChore] = useState(null);
   const [submitting, setSubmitting] = useState(false);
-  const [familyMembers, setFamilyMembers] = useState([]);
   const [formData, setFormData] = useState({
     title: '',
     description: '',
@@ -80,7 +82,7 @@ function ChoresPage() {
     // Special handling for assignedTo
     if (name === 'assignedTo') {
       console.log('Assigning to family member with ID:', value);
-      const member = familyMembers.find(m => m.id === value);
+      const member = members.find(m => m.id === value);
       console.log('Selected family member:', member);
     }
     
@@ -88,7 +90,7 @@ function ChoresPage() {
       ...prev,
       [name]: value
     }));
-  }, [familyMembers]);
+  }, [members]);
 
   const handleSubmit = useCallback(async (e) => {
     e.preventDefault();
@@ -102,7 +104,7 @@ function ChoresPage() {
       // Find the assigned family member
       let assignedMember = null;
       if (formData.assignedTo) {
-        assignedMember = familyMembers.find(m => m.id === formData.assignedTo);
+        assignedMember = members.find(m => m.id === formData.assignedTo);
         console.log('Found assigned member:', assignedMember);
       }
       
@@ -138,24 +140,13 @@ function ChoresPage() {
       }
 
       setDialogOpen(false);
-      setFormData({
-        title: '',
-        description: '',
-        points: 0,
-        assignedTo: '',
-        dueDate: '',
-        frequency: 'once',
-        totalInstances: 1,
-        completedInstances: 0,
-        isRecurring: false
-      });
     } catch (err) {
       console.error('Error saving chore:', err);
       setError('Failed to save chore: ' + err.message);
     } finally {
       setSubmitting(false);
     }
-  }, [familyMembers, formData, selectedChore, user?.familyId, user?.uid]);
+  }, [formData, selectedChore, user, members]);
 
   const handleToggleComplete = useCallback(async (choreId, currentStatus) => {
     try {
@@ -240,7 +231,7 @@ function ChoresPage() {
     setSelectedChore(chore);
     console.log('Editing chore:', chore);
     console.log('Chore assignedTo:', chore.assignedTo);
-    console.log('Available family members:', familyMembers);
+    console.log('Available family members:', members);
     
     setFormData({
       title: chore.title || '',
@@ -278,69 +269,45 @@ function ChoresPage() {
   };
 
   useEffect(() => {
-    let unsubscribe = () => {};
-
     const fetchChores = async () => {
       if (!user?.familyId) {
-        setError('Please join or create a family to manage chores');
+        console.warn('No family ID available for fetching chores');
         setLoading(false);
         return;
       }
 
       try {
         setLoading(true);
+        console.log('Fetching chores with familyId:', user.familyId);
         
-        // Listen to chores in the families/{familyId}/chores collection
+        // Set up real-time listener for chores
         const choresRef = collection(db, 'families', user.familyId, 'chores');
-        
-        unsubscribe = onSnapshot(choresRef, (snapshot) => {
-          const choresList = snapshot.docs.map(doc => ({
+        return onSnapshot(choresRef, (snapshot) => {
+          const choreData = snapshot.docs.map(doc => ({
             id: doc.id,
-            ...doc.data(),
-            createdAt: doc.data().createdAt?.toDate?.() || new Date(),
-            updatedAt: doc.data().updatedAt?.toDate?.() || new Date(),
+            ...doc.data()
           }));
-          setChores(choresList);
+          console.log('Chores loaded successfully:', choreData?.length);
+          setChores(choreData);
           setLoading(false);
         }, (err) => {
-          console.error('Error loading chores:', err);
+          console.error('Error in chores snapshot listener:', err);
           setError('Failed to load chores: ' + err.message);
           setLoading(false);
         });
       } catch (err) {
         console.error('Error setting up chores listener:', err);
-        setError('Failed to initialize chores: ' + err.message);
+        setError('Failed to load chores: ' + err.message);
         setLoading(false);
       }
     };
 
-    fetchChores();
-    return () => unsubscribe();
-  }, [user?.familyId]);
-
-  useEffect(() => {
-    const loadFamilyMembers = async () => {
-      if (!user?.familyId) {
-        console.warn('No family ID available for loading family members');
-        return;
-      }
-
-      try {
-        setLoading(true);
-        console.log('Loading family members with familyId:', user.familyId);
-        const members = await familyService.getAllFamilyMembers(user.familyId);
-        console.log('Family members loaded successfully:', members?.length);
-        console.log('Family members:', members);
-        setFamilyMembers(members || []);
-      } catch (err) {
-        console.error('Error loading family members:', err);
-        setError('Failed to load family members: ' + err.message);
-      } finally {
-        setLoading(false);
+    const unsubscribe = fetchChores();
+    return () => {
+      if (unsubscribe && typeof unsubscribe === 'function') {
+        unsubscribe();
       }
     };
-
-    loadFamilyMembers();
   }, [user?.familyId]);
 
   if (loading) {
@@ -404,7 +371,7 @@ function ChoresPage() {
         keepMounted={false}
       >
         <DialogTitle>
-          {selectedChore ? 'Edit Chore' : 'Add New Chore'}
+          {selectedChore ? 'Edit Chore' : 'Create New Chore'}
         </DialogTitle>
         <DialogContent dividers>
           <Box component="form" id="chore-form" onSubmit={handleSubmit} noValidate>
@@ -432,111 +399,93 @@ function ChoresPage() {
               onChange={handleChange}
               sx={{ mb: 2 }}
             />
-            <FormControl fullWidth margin="dense" sx={{ mb: 2 }}>
-              <InputLabel id="assign-to-label">Assign To</InputLabel>
-              <Select
-                labelId="assign-to-label"
-                name="assignedTo"
-                value={formData.assignedTo || ''}
-                label="Assign To"
-                onChange={handleChange}
-                MenuProps={{
-                  PaperProps: {
-                    style: {
-                      maxHeight: 300
-                    }
-                  }
-                }}
-                renderValue={(selected) => {
-                  if (!selected) return "Unassigned";
-                  const member = familyMembers.find(m => m.id === selected);
-                  return member ? member.name : selected;
-                }}
-              >
-                <MenuItem value="">
-                  <em>Unassigned</em>
-                </MenuItem>
-                
-                {/* Simplified flat list for testing */}
-                {familyMembers && familyMembers.map(member => (
-                  <MenuItem key={member.id} value={member.id}>
-                    {member.name || member.displayName || 'Family Member'} 
-                    ({member.type === 'child' ? 'Child' : 'Adult'})
-                  </MenuItem>
-                ))}
-              </Select>
-              
-              {/* Debug buttons to directly set assignedTo */}
-              <Box sx={{ mt: 1, display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-                <Typography variant="caption" sx={{ width: '100%' }}>Debug: Assign directly to:</Typography>
-                {familyMembers && familyMembers.map(member => (
-                  <Button 
-                    key={member.id}
-                    size="small"
-                    variant="outlined"
-                    onClick={() => {
-                      console.log('Direct assignment to:', member);
-                      setFormData(prev => ({
-                        ...prev,
-                        assignedTo: member.id
-                      }));
+            <Grid container spacing={2} sx={{ mt: 1 }}>
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  margin="dense"
+                  name="points"
+                  label="Points"
+                  type="number"
+                  fullWidth
+                  variant="outlined"
+                  value={formData.points}
+                  onChange={handleChange}
+                  InputProps={{
+                    inputProps: { min: 0 },
+                  }}
+                  sx={{ mb: 2 }}
+                />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <FormControl fullWidth margin="dense" sx={{ mb: 2 }}>
+                  <InputLabel id="assigned-to-label">Assigned To</InputLabel>
+                  <Select
+                    labelId="assigned-to-label"
+                    name="assignedTo"
+                    value={formData.assignedTo || ''}
+                    label="Assigned To"
+                    onChange={handleChange}
+                    MenuProps={{
+                      PaperProps: {
+                        style: {
+                          maxHeight: 300
+                        }
+                      }
+                    }}
+                    renderValue={(selected) => {
+                      if (!selected) return "Unassigned";
+                      const member = members.find(m => m.id === selected);
+                      return member ? member.name : selected;
                     }}
                   >
-                    {member.name}
-                  </Button>
-                ))}
-              </Box>
-            </FormControl>
+                    <MenuItem value="">
+                      <em>Unassigned</em>
+                    </MenuItem>
+                    
+                    {/* Group members by type */}
+                    {members.some(m => m.type === 'child') && (
+                      <ListSubheader>Children</ListSubheader>
+                    )}
+                    {members
+                      .filter(m => m.type === 'child' || m.role === 'child')
+                      .map(member => (
+                        <MenuItem key={member.id} value={member.id}>
+                          {member.name || member.displayName || 'Family Member'}
+                        </MenuItem>
+                      ))
+                    }
+                    
+                    {members.some(m => m.type === 'adult' && m.role !== 'child') && (
+                      <ListSubheader>Adults</ListSubheader>
+                    )}
+                    {members
+                      .filter(m => m.type === 'adult' && m.role !== 'child')
+                      .map(member => (
+                        <MenuItem key={member.id} value={member.id}>
+                          {member.name || member.displayName || 'Family Member'}
+                        </MenuItem>
+                      ))
+                    }
+                  </Select>
+                </FormControl>
+              </Grid>
+            </Grid>
             
-            <TextField
-              margin="dense"
-              name="points"
-              label="Points"
-              type="number"
-              fullWidth
-              variant="outlined"
-              value={formData.points}
-              onChange={handleChange}
-              InputProps={{
-                inputProps: { min: 0 },
-                startAdornment: <InputAdornment position="start">🏆</InputAdornment>,
-              }}
-              sx={{ mb: 2 }}
-            />
-            
-            <TextField
-              margin="dense"
-              name="dueDate"
-              label="Due Date"
-              type="date"
-              fullWidth
-              variant="outlined"
-              value={formData.dueDate}
-              onChange={handleChange}
-              InputLabelProps={{
-                shrink: true,
-              }}
-              sx={{ mb: 2 }}
-            />
-            
-            <FormControl component="fieldset" sx={{ mb: 2 }}>
-              <Typography variant="subtitle1" gutterBottom>
-                Frequency
-              </Typography>
-              <RadioGroup
+            <FormControl fullWidth margin="dense" sx={{ mb: 2 }}>
+              <InputLabel id="frequency-label">Frequency</InputLabel>
+              <Select
+                labelId="frequency-label"
                 name="frequency"
                 value={formData.frequency}
+                label="Frequency"
                 onChange={handleChange}
               >
                 {FREQUENCY_OPTIONS.map(option => (
-                  <FormControlLabel
-                    key={option.value}
-                    value={option.value}
-                    control={<Radio />}
-                    label={option.label}
-                  />
+                  <MenuItem key={option.value} value={option.value}>
+                    {option.label}
+                  </MenuItem>
                 ))}
-              </RadioGroup>
+              </Select>
             </FormControl>
             
             {formData.frequency !== 'once' && (
@@ -556,6 +505,21 @@ function ChoresPage() {
                 sx={{ mb: 2 }}
               />
             )}
+            
+            <TextField
+              margin="dense"
+              name="dueDate"
+              label="Due Date"
+              type="date"
+              fullWidth
+              variant="outlined"
+              value={formData.dueDate}
+              onChange={handleChange}
+              InputLabelProps={{
+                shrink: true,
+              }}
+              sx={{ mb: 2 }}
+            />
           </Box>
         </DialogContent>
         <DialogActions>

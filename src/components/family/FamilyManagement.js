@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Card,
   CardContent,
@@ -11,26 +11,43 @@ import {
   ListItem,
   ListItemText,
   ListItemAvatar,
+  ListItemSecondaryAction,
   Avatar,
   Alert,
   Snackbar,
   IconButton,
-  Chip
+  Chip,
+  Select,
+  MenuItem,
+  FormControl,
+  InputLabel,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogContentText,
+  DialogActions,
+  Tooltip
 } from '@mui/material';
 import {
   PersonAdd as PersonAddIcon,
   ContentCopy as ContentCopyIcon,
   Check as CheckIcon,
-  ChildCare as ChildCareIcon
+  ChildCare as ChildCareIcon,
+  Edit as EditIcon,
+  Delete as DeleteIcon,
+  Refresh as RefreshIcon,
+  Email as EmailIcon
 } from '@mui/icons-material';
 import { useFamily } from '../../contexts/FamilyContext';
 import { useAuth } from '../../contexts/AuthContext';
 import Loader from '../common/Loader';
 import AddChildModal from './AddChildModal';
+import { db } from '../../firebase';
+import { collection, getDocs, query, where } from 'firebase/firestore';
 
 export default function FamilyManagement() {
   const { user } = useAuth();
-  const { family, members, loading, error, createFamilyInvite, reloadMembers } = useFamily();
+  const { family, members, loading, error, createFamilyInvite, reloadMembers, updateMemberRole, deleteFamilyMember, syncFamilyMembers, manuallyAddMember } = useFamily();
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteCode, setInviteCode] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
@@ -39,6 +56,48 @@ export default function FamilyManagement() {
   const [showSnackbar, setShowSnackbar] = useState(false);
   const [copied, setCopied] = useState(false);
   const [addChildModalOpen, setAddChildModalOpen] = useState(false);
+  const [editingMemberId, setEditingMemberId] = useState(null);
+  const [editRole, setEditRole] = useState('');
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+  const [memberToDelete, setMemberToDelete] = useState(null);
+  const [pendingInvites, setPendingInvites] = useState([]);
+  const [loadingInvites, setLoadingInvites] = useState(false);
+
+  // Fetch pending invites
+  const fetchPendingInvites = async () => {
+    if (!family?.id) return;
+    
+    try {
+      setLoadingInvites(true);
+      const invitesRef = collection(db, 'invites');
+      const invitesQuery = query(invitesRef, where('familyId', '==', family.id), where('status', '==', 'pending'));
+      const snapshot = await getDocs(invitesQuery);
+      
+      if (snapshot.empty) {
+        setPendingInvites([]);
+        return;
+      }
+      
+      const invites = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      
+      setPendingInvites(invites);
+    } catch (err) {
+      console.error('Error fetching pending invites:', err);
+      setLocalError('Failed to fetch pending invites');
+    } finally {
+      setLoadingInvites(false);
+    }
+  };
+  
+  // Load pending invites on component mount
+  useEffect(() => {
+    if (family?.id) {
+      fetchPendingInvites();
+    }
+  }, [family?.id]);
 
   const handleInvite = async (e) => {
     e.preventDefault();
@@ -57,6 +116,9 @@ export default function FamilyManagement() {
       setInviteCode(invite.code);
       setSuccessMessage(`Invite created for ${inviteEmail}`);
       setInviteEmail('');
+      
+      // Refresh pending invites
+      fetchPendingInvites();
     } catch (err) {
       console.error('Error creating invite:', err);
       setLocalError(err.message || 'Failed to create invite. Please try again.');
@@ -91,6 +153,198 @@ export default function FamilyManagement() {
       setSuccessMessage('Child profile added successfully');
     } catch (err) {
       setLocalError('Child was added but failed to refresh members list');
+    }
+  };
+  
+  const startEditingMember = (member) => {
+    setEditingMemberId(member.id);
+    setEditRole(member.role || 'member');
+  };
+  
+  const cancelEditingMember = () => {
+    setEditingMemberId(null);
+    setEditRole('');
+  };
+  
+  const saveRoleChange = async (memberId) => {
+    if (!editRole) {
+      cancelEditingMember();
+      return;
+    }
+    
+    setIsSubmitting(true);
+    try {
+      await updateMemberRole(memberId, editRole);
+      setSuccessMessage(`Member role updated to ${editRole}`);
+      cancelEditingMember();
+    } catch (err) {
+      console.error('Error updating role:', err);
+      setLocalError(err.message || 'Failed to update member role');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleDeleteClick = (member) => {
+    setMemberToDelete(member);
+    setConfirmDeleteOpen(true);
+    // Log the member being selected for deletion
+    console.log('Selected member for deletion:', member);
+  };
+
+  const handleCancelDelete = () => {
+    setMemberToDelete(null);
+    setConfirmDeleteOpen(false);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!memberToDelete) return;
+    
+    setConfirmDeleteOpen(false);
+    setIsSubmitting(true);
+    
+    try {
+      console.log('Attempting to delete family member:', memberToDelete);
+      
+      // Check if the member is from subUsers collection (old format)
+      if (memberToDelete.type === 'child' && !memberToDelete.uid) {
+        const result = await deleteFamilyMember(memberToDelete.id);
+        console.log('Delete result:', result);
+        
+        if (result) {
+          setSuccessMessage(`Successfully deleted ${memberToDelete.name || 'family member'}`);
+          // Force a refresh of the members list
+          await reloadMembers();
+        } else {
+          throw new Error('Failed to delete family member - operation returned false');
+        }
+      } else {
+        // Standard deletion flow
+        const result = await deleteFamilyMember(memberToDelete.id);
+        console.log('Delete result:', result);
+        
+        if (result) {
+          setSuccessMessage(`Successfully deleted ${memberToDelete.name || 'family member'}`);
+          // Force a refresh of the members list after deletion
+          await reloadMembers();
+        } else {
+          throw new Error('Failed to delete family member - operation returned false');
+        }
+      }
+      
+      setMemberToDelete(null);
+    } catch (err) {
+      console.error('Error deleting family member:', err);
+      setLocalError(err.message || 'Failed to delete family member');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+  
+  const handleRefreshMembers = async () => {
+    setIsSubmitting(true);
+    setLocalError('');
+    setSuccessMessage('');
+    
+    try {
+      await reloadMembers();
+      setSuccessMessage('Family members refreshed');
+    } catch (err) {
+      console.error('Error refreshing members:', err);
+      setLocalError(err.message || 'Failed to refresh members');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // Handle resending an invite email 
+  const handleResendInvite = async (email, code) => {
+    setIsSubmitting(true);
+    setLocalError('');
+    
+    try {
+      // Resend invitation email using same code
+      // This is a fake implementation - you'll need to add actual email sending functionality
+      console.log(`Would resend invite with code ${code} to ${email}`);
+      
+      // For now, just copy the code to clipboard for manual sharing
+      await navigator.clipboard.writeText(code);
+      
+      setSuccessMessage(`Invite code ${code} copied to clipboard for ${email}. Please share this code with them directly.`);
+      setShowSnackbar(true);
+    } catch (err) {
+      console.error('Error resending invite:', err);
+      setLocalError('Failed to resend invite');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleSyncMembers = async () => {
+    setIsSubmitting(true);
+    setLocalError('');
+    setSuccessMessage('');
+    
+    try {
+      console.log('Synchronizing family members...');
+      await syncFamilyMembers();
+      setSuccessMessage('Successfully synchronized all family members. Any missing members should now appear.');
+    } catch (err) {
+      console.error('Error synchronizing members:', err);
+      setLocalError(err.message || 'Failed to synchronize family members');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // Handle manual user sync by email
+  const handleManualSync = async () => {
+    // Your wife's email and known user ID
+    const spouseEmail = "bechtelk3@gmail.com";
+    const spouseName = "Kim Bechtel";
+    
+    setIsSubmitting(true);
+    setLocalError('');
+    setSuccessMessage('');
+    
+    try {
+      console.log(`Manually syncing user with email: ${spouseEmail}`);
+      
+      // Get the family document to get the familyId
+      const familyId = user.familyId;
+      if (!familyId) {
+        throw new Error('You are not part of a family');
+      }
+      
+      // Create a user data object for Kim
+      const userData = {
+        id: "I3w22hVETFeJrAscD5nRoF70PtJ2", // Actual UID from Firebase Auth
+        email: spouseEmail,
+        displayName: spouseName,
+        role: "member",
+        type: "adult",
+        color: "#0693e3",
+        joinedAt: new Date().toISOString()
+      };
+      
+      // Manually add the member document
+      await manuallyAddMember(userData);
+      
+      // Set success message
+      setSuccessMessage(`Successfully added ${spouseName} to your family!`);
+      
+      // Try the normal sync as well in case it works now
+      try {
+        await syncFamilyMembers();
+      } catch (syncErr) {
+        console.error('Error during family sync:', syncErr);
+        // Keep the original success message
+      }
+    } catch (err) {
+      console.error('Error in manual sync:', err);
+      setLocalError(err.message || 'Failed to manually sync users');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -129,6 +383,44 @@ export default function FamilyManagement() {
             <Typography variant="body1">
               <strong>Members:</strong> {members?.length || 0}
             </Typography>
+            
+            <Box sx={{ mt: 1, display: 'flex', gap: 2 }}>
+              <Tooltip title="Refresh members list">
+                <Button 
+                  variant="outlined" 
+                  size="small" 
+                  startIcon={<RefreshIcon />}
+                  onClick={handleRefreshMembers}
+                  disabled={isSubmitting}
+                >
+                  Refresh Members
+                </Button>
+              </Tooltip>
+
+              <Tooltip title="Find and add missing family members">
+                <Button 
+                  variant="contained" 
+                  color="primary"
+                  size="small" 
+                  onClick={handleSyncMembers}
+                  disabled={isSubmitting}
+                >
+                  Sync All Members
+                </Button>
+              </Tooltip>
+              
+              <Tooltip title="Manually sync Kim's account (emergency fix)">
+                <Button 
+                  variant="contained" 
+                  color="secondary"
+                  size="small" 
+                  onClick={handleManualSync}
+                  disabled={isSubmitting}
+                >
+                  Fix Missing Spouse
+                </Button>
+              </Tooltip>
+            </Box>
           </Box>
         </Box>
 
@@ -182,6 +474,66 @@ export default function FamilyManagement() {
               </Box>
             </Box>
           )}
+          
+          {/* Pending invites section */}
+          {pendingInvites.length > 0 && (
+            <Box sx={{ mt: 3 }}>
+              <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+                Pending Invites:
+              </Typography>
+              <Alert severity="info" sx={{ mb: 2 }}>
+                For your spouse to join, have them create an account and use one of the invite codes below.
+              </Alert>
+              <List dense>
+                {pendingInvites.map(invite => (
+                  <ListItem key={invite.id} divider>
+                    <ListItemAvatar>
+                      <Avatar sx={{ bgcolor: 'primary.light' }}>
+                        <EmailIcon />
+                      </Avatar>
+                    </ListItemAvatar>
+                    <ListItemText
+                      primary={invite.email}
+                      secondary={
+                        <>
+                          <strong>Code:</strong> {invite.code} 
+                          <br />
+                          <Typography variant="caption" color="text.secondary">
+                            Created: {new Date(invite.createdAt).toLocaleDateString()}
+                          </Typography>
+                        </>
+                      }
+                    />
+                    <Box sx={{ display: 'flex' }}>
+                      <Tooltip title="Copy invite code">
+                        <IconButton
+                          size="small"
+                          onClick={() => {
+                            navigator.clipboard.writeText(invite.code);
+                            setShowSnackbar(true);
+                          }}
+                        >
+                          <ContentCopyIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                      <Tooltip title="Share invite with this person">
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          color="primary"
+                          sx={{ ml: 1 }}
+                          onClick={() => handleResendInvite(invite.email, invite.code)}
+                          disabled={isSubmitting}
+                        >
+                          Share
+                        </Button>
+                      </Tooltip>
+                    </Box>
+                  </ListItem>
+                ))}
+              </List>
+            </Box>
+          )}
         </Box>
 
         <Divider sx={{ my: 2 }} />
@@ -217,19 +569,73 @@ export default function FamilyManagement() {
                     .map((member) => (
                       <ListItem key={member.id}>
                         <ListItemAvatar>
-                          <Avatar>{member.name?.charAt(0).toUpperCase()}</Avatar>
+                          <Avatar sx={{ bgcolor: member.color || 'primary.main' }}>
+                            {member.name?.charAt(0).toUpperCase()}
+                          </Avatar>
                         </ListItemAvatar>
                         <ListItemText 
                           primary={member.name} 
                           secondary={member.email}
                           primaryTypographyProps={{ fontWeight: 500 }}
                         />
-                        <Chip 
-                          label="Adult"
-                          color="primary"
-                          size="small"
-                          variant="outlined"
-                        />
+                        
+                        {editingMemberId === member.id ? (
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <FormControl size="small" sx={{ minWidth: 120 }}>
+                              <Select
+                                value={editRole}
+                                onChange={(e) => setEditRole(e.target.value)}
+                                disabled={isSubmitting}
+                              >
+                                <MenuItem value="member">Member</MenuItem>
+                                <MenuItem value="child">Child</MenuItem>
+                              </Select>
+                            </FormControl>
+                            <Button 
+                              variant="contained" 
+                              size="small" 
+                              onClick={() => saveRoleChange(member.id)}
+                              disabled={isSubmitting}
+                            >
+                              Save
+                            </Button>
+                            <Button 
+                              variant="outlined" 
+                              size="small" 
+                              onClick={cancelEditingMember}
+                              disabled={isSubmitting}
+                            >
+                              Cancel
+                            </Button>
+                          </Box>
+                        ) : (
+                          <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                            <Chip 
+                              label={member.role === 'child' ? 'Child' : 'Adult'}
+                              color="primary"
+                              size="small"
+                              variant="outlined"
+                            />
+                            <IconButton
+                              size="small"
+                              onClick={() => startEditingMember(member)}
+                              sx={{ ml: 1 }}
+                            >
+                              <EditIcon fontSize="small" />
+                            </IconButton>
+                            {/* Only add delete for non-current user */}
+                            {member.uid !== user.uid && (
+                              <IconButton
+                                size="small"
+                                color="error"
+                                onClick={() => handleDeleteClick(member)}
+                                sx={{ ml: 1 }}
+                              >
+                                <DeleteIcon fontSize="small" />
+                              </IconButton>
+                            )}
+                          </Box>
+                        )}
                       </ListItem>
                     ))}
                 </>
@@ -247,7 +653,7 @@ export default function FamilyManagement() {
                     .map((member) => (
                       <ListItem key={member.id}>
                         <ListItemAvatar>
-                          <Avatar sx={{ bgcolor: 'secondary.main' }}>
+                          <Avatar sx={{ bgcolor: member.color || 'secondary.main' }}>
                             {member.name?.charAt(0).toUpperCase()}
                           </Avatar>
                         </ListItemAvatar>
@@ -256,12 +662,73 @@ export default function FamilyManagement() {
                           secondary={member.birthYear ? `Birth Year: ${member.birthYear}` : null}
                           primaryTypographyProps={{ fontWeight: 500 }}
                         />
-                        <Chip 
-                          label="Child"
-                          color="secondary"
-                          size="small"
-                          variant="outlined"
-                        />
+                        
+                        {editingMemberId === member.id ? (
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <FormControl size="small" sx={{ minWidth: 120 }}>
+                              <Select
+                                value={editRole}
+                                onChange={(e) => setEditRole(e.target.value)}
+                                disabled={isSubmitting}
+                              >
+                                <MenuItem value="member">Member</MenuItem>
+                                <MenuItem value="child">Child</MenuItem>
+                              </Select>
+                            </FormControl>
+                            <Button 
+                              variant="contained" 
+                              size="small" 
+                              onClick={() => saveRoleChange(member.id)}
+                              disabled={isSubmitting}
+                            >
+                              Save
+                            </Button>
+                            <Button 
+                              variant="outlined" 
+                              size="small" 
+                              onClick={cancelEditingMember}
+                              disabled={isSubmitting}
+                            >
+                              Cancel
+                            </Button>
+                          </Box>
+                        ) : (
+                          <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                            <Chip 
+                              label="Child"
+                              color="secondary"
+                              size="small"
+                              variant="outlined"
+                            />
+                            {member.source && (
+                              <Tooltip title={`Data source: ${member.source}`}>
+                                <Chip
+                                  label={member.source === 'members_collection' ? 'Main' : 'Legacy'}
+                                  size="small"
+                                  variant="outlined"
+                                  sx={{ ml: 1, fontSize: '0.6rem' }}
+                                />
+                              </Tooltip>
+                            )}
+                            <IconButton
+                              size="small"
+                              onClick={() => startEditingMember(member)}
+                              sx={{ ml: 1 }}
+                            >
+                              <EditIcon fontSize="small" />
+                            </IconButton>
+                            <Tooltip title="Delete this child">
+                              <IconButton
+                                size="small"
+                                color="error" 
+                                onClick={() => handleDeleteClick(member)}
+                                sx={{ ml: 1 }}
+                              >
+                                <DeleteIcon fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+                          </Box>
+                        )}
                       </ListItem>
                     ))}
                 </>
@@ -288,6 +755,37 @@ export default function FamilyManagement() {
         familyId={family?.id}
         onSuccess={handleAddChildSuccess}
       />
+
+      {/* Delete confirmation dialog */}
+      <Dialog
+        open={confirmDeleteOpen}
+        onClose={handleCancelDelete}
+      >
+        <DialogTitle>
+          Confirm Deletion
+        </DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            Are you sure you want to delete {memberToDelete?.name || 'this family member'}?
+            {memberToDelete?.type === 'child' ? 
+              ' This will remove their profile and any associated records.' : 
+              ' This will remove them from your family.'}
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCancelDelete} disabled={isSubmitting}>
+            Cancel
+          </Button>
+          <Button 
+            onClick={handleConfirmDelete} 
+            color="error"
+            variant="contained"
+            disabled={isSubmitting}
+          >
+            {isSubmitting ? 'Deleting...' : 'Delete'}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Card>
   );
 } 
